@@ -2,9 +2,11 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
 
   "name": "kobota",
-  "account_id": "dba6ca6525fb5cc77b5b30c35cd9840e",
+
+  "account_id": "f3136c5e-9742-4b58-a57e-c35c5e5e39e7",
 
   "main": "src/index.js",
+
   "compatibility_date": "2026-10-05",
 
   "ai": {
@@ -15,7 +17,7 @@
     {
       "binding": "DB",
       "database_name": "kotoba-db1",
-      "database_id": "ID_MỚI_CỦA_BẠN"
+      "database_id": "ID_MỚI_CỦA_KOTOBA_DB1"
     }
   ],
 

@@ -1,27 +1,309 @@
-{
-  "$schema": "./node_modules/wrangler/config-schema.json",
+/**
+ * KOTOBA Cloudflare Worker
+ *
+ * Nhiệm vụ:
+ * - /api/*  -> xử lý bằng backend
+ * - HTML/CSS/JS/ảnh -> Cloudflare Static Assets xử lý
+ */
 
-  // Tên phải khớp tên Worker trên Cloudflare của bạn
-  "name": "kobota",
+import { apiError, HttpError, json } from "./lib/http.js";
 
-  // File backend chính
-  "main": "src/index.js",
+import {
+  login,
+  logout,
+  register
+} from "./routes/auth.js";
 
-  // Ngày tương thích runtime
-  "compatibility_date": "2026-10-05",
+import {
+  conversation
+} from "./routes/conversation.js";
 
-  // Frontend static
-  "assets": {
-    // Toàn bộ HTML/CSS/JS/ảnh nằm trong public
-    "directory": "./public",
+import {
+  dictionaryLookup
+} from "./routes/dictionary.js";
 
-    // Cho Worker truy cập static assets khi cần
-    "binding": "ASSETS",
+import {
+  getState,
+  me,
+  putState
+} from "./routes/state.js";
 
-    // Chỉ request /api/* mới chạy backend trước
-    // HTML/CSS/JS/ảnh sẽ được Cloudflare phục vụ trực tiếp
-    "run_worker_first": [
-      "/api/*"
-    ]
+import {
+  reviewVocabulary,
+  upsertVocabulary
+} from "./routes/vocabulary.js";
+
+
+/* =========================================================
+   1. KIỂM TRA DATABASE
+   ========================================================= */
+
+/**
+ * Các API có dữ liệu người dùng cần Cloudflare D1.
+ * Nếu DB chưa được bind thì trả lỗi rõ ràng.
+ */
+function assertDatabase(env) {
+  if (!env.DB) {
+    throw new HttpError(
+      500,
+      "D1 chưa được kết nối. Cần tạo kotoba-db và binding DB."
+    );
   }
 }
+
+
+/* =========================================================
+   2. API ROUTER
+   ========================================================= */
+
+async function handleApi(request, env) {
+  const url = new URL(request.url);
+
+  const path = url.pathname;
+
+  const method = request.method.toUpperCase();
+
+
+  /* ---------------------------------------------------------
+     HEALTH CHECK
+     Không cần database
+     --------------------------------------------------------- */
+
+  if (
+    method === "GET" &&
+    path === "/api/health"
+  ) {
+    return json({
+      ok: true,
+      service: "kotoba-cloudflare",
+      databaseBound: Boolean(env.DB)
+    });
+  }
+
+
+  /* ---------------------------------------------------------
+     Từ đây trở xuống đều cần database
+     --------------------------------------------------------- */
+
+  assertDatabase(env);
+
+
+  /* ---------------------------------------------------------
+     AUTH
+     --------------------------------------------------------- */
+
+  if (
+    method === "POST" &&
+    path === "/api/auth/register"
+  ) {
+    return register(request, env);
+  }
+
+
+  if (
+    method === "POST" &&
+    path === "/api/auth/login"
+  ) {
+    return login(request, env);
+  }
+
+
+  if (
+    method === "POST" &&
+    path === "/api/auth/logout"
+  ) {
+    return logout(request, env);
+  }
+
+
+  /* ---------------------------------------------------------
+     USER
+     --------------------------------------------------------- */
+
+  if (
+    method === "GET" &&
+    path === "/api/me"
+  ) {
+    return me(request, env);
+  }
+
+
+  /* ---------------------------------------------------------
+     APP STATE / PROGRESS
+     --------------------------------------------------------- */
+
+  if (
+    method === "GET" &&
+    path === "/api/state"
+  ) {
+    return getState(request, env);
+  }
+
+
+  const stateMatch =
+    path.match(/^\/api\/state\/([^/]+)$/);
+
+
+  if (
+    method === "PUT" &&
+    stateMatch
+  ) {
+    const key =
+      decodeURIComponent(stateMatch[1]);
+
+    return putState(
+      request,
+      env,
+      key
+    );
+  }
+
+
+  /* ---------------------------------------------------------
+     VOCABULARY / FLASHCARD
+     --------------------------------------------------------- */
+
+  if (
+    method === "POST" &&
+    path === "/api/vocabulary/upsert"
+  ) {
+    return upsertVocabulary(
+      request,
+      env
+    );
+  }
+
+
+  if (
+    method === "POST" &&
+    path === "/api/vocabulary/review"
+  ) {
+    return reviewVocabulary(
+      request,
+      env
+    );
+  }
+
+
+  /* ---------------------------------------------------------
+     DICTIONARY
+     --------------------------------------------------------- */
+
+  if (
+    method === "POST" &&
+    path === "/api/dictionary"
+  ) {
+    return dictionaryLookup(
+      request,
+      env
+    );
+  }
+
+
+  /* ---------------------------------------------------------
+     AI CONVERSATION
+     --------------------------------------------------------- */
+
+  if (
+    method === "POST" &&
+    path === "/api/ai/conversation"
+  ) {
+    return conversation(
+      request,
+      env
+    );
+  }
+
+
+  /* ---------------------------------------------------------
+     API KHÔNG TỒN TẠI
+     --------------------------------------------------------- */
+
+  return apiError(
+    404,
+    "API route が見つかりません。"
+  );
+}
+
+
+/* =========================================================
+   3. WORKER ENTRY POINT
+   ========================================================= */
+
+export default {
+
+  async fetch(request, env) {
+
+    try {
+
+      const url =
+        new URL(request.url);
+
+
+      /* -------------------------------------------------------
+         API
+         ------------------------------------------------------- */
+
+      if (
+        url.pathname.startsWith("/api/")
+      ) {
+
+        return await handleApi(
+          request,
+          env
+        );
+
+      }
+
+
+      /* -------------------------------------------------------
+         FALLBACK STATIC ASSETS
+
+         Bình thường phần này gần như không được gọi vì
+         wrangler.jsonc chỉ cho /api/* chạy Worker trước.
+         ------------------------------------------------------- */
+
+      return env.ASSETS.fetch(
+        request
+      );
+
+    }
+
+    catch (error) {
+
+      /* -------------------------------------------------------
+         Lỗi do chúng ta chủ động tạo
+         ------------------------------------------------------- */
+
+      if (
+        error instanceof HttpError
+      ) {
+
+        return apiError(
+          error.status,
+          error.detail
+        );
+
+      }
+
+
+      /* -------------------------------------------------------
+         Lỗi ngoài dự kiến
+         ------------------------------------------------------- */
+
+      console.error(
+        "KOTOBA Worker error:",
+        error
+      );
+
+
+      return apiError(
+        500,
+        "サーバーでエラーが発生しました。"
+      );
+
+    }
+
+  }
+
+};

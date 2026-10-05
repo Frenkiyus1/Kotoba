@@ -18,13 +18,12 @@
   // =========================================================
   // CLOUDFLARE D1 DATABASE
   // Backend sử dụng bằng env.DB
-  // GIỮ database_id thật của bạn
   // =========================================================
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "kotoba-db",
-      "database_id": "DATABASE_ID_CỦA_BẠN"
+      "database_id": "e12223a8-cb42-4dda-b6f1-f2d832566ab8"
     }
   ],
 

@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>学習を始める — KOTOBA</title>
+
+  <!-- CSS chung của toàn bộ KOTOBA -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+  <main class="auth-page">
+
+    <!-- =====================================================
+         LEFT SIDE — Ảnh giới thiệu
+         Ảnh riêng của trang start: assets/start-bg.jpg
+         ===================================================== -->
+    <section class="auth-visual auth-visual--start">
+
+      <!-- Logo quay về homepage -->
+      <a class="brand auth-brand-on-image" href="index.html">
+        <span class="brand-mark">こ</span>
+        KOTOBA
+      </a>
+
+      <!-- Copy đặt ở góc dưới để không đè logo -->
+      <div class="auth-visual-copy">
+        <span class="eyebrow auth-eyebrow-light">KOTOBA</span>
+
+        <h1 class="serif">
+          今日から、<br>
+          少しずつ。
+        </h1>
+
+        <p>日本語を、毎日の習慣に。</p>
+      </div>
+    </section>
+
+    <!-- =====================================================
+         RIGHT SIDE — Login / Register
+         app.js dùng các id bên dưới để xử lý form.
+         ===================================================== -->
+    <section class="auth-panel">
+      <div class="auth-box">
+
+        <a class="brand" href="index.html">
+          <span class="brand-mark">こ</span>
+          KOTOBA
+        </a>
+
+        <h1 class="auth-title">学習を始める</h1>
+
+        <p class="muted">
+          続きから学ぶか、新しい学習を始めましょう。
+        </p>
+
+        <!-- Tab login / register -->
+        <div class="auth-tabs">
+          <button class="active" data-mode="login" type="button">ログイン</button>
+          <button data-mode="register" type="button">新規登録</button>
+        </div>
+
+        <!-- app.js đọc form này -->
+        <form id="authForm">
+
+          <!-- Mode hiện tại: login hoặc register -->
+          <input type="hidden" id="authMode" value="login">
+
+          <!-- Chỉ hiện khi người dùng chọn 新規登録 -->
+          <div class="field hidden" id="nameField">
+            <label for="authName">名前</label>
+            <input id="authName" placeholder="名前を入力">
+          </div>
+
+          <div class="field">
+            <label for="authEmail">メールアドレス</label>
+            <input
+              id="authEmail"
+              type="email"
+              required
+              autocomplete="email"
+              placeholder="name@example.com"
+            >
+          </div>
+
+          <div class="field">
+            <label for="authPassword">パスワード</label>
+            <input
+              id="authPassword"
+              type="password"
+              required
+              minlength="6"
+              autocomplete="current-password"
+              placeholder="6文字以上"
+            >
+          </div>
+
+          <button
+            id="authSubmit"
+            class="btn btn-primary btn-block"
+            type="submit"
+          >
+            学習を始める
+          </button>
+
+          <!-- Lỗi từ backend sẽ hiện ở đây -->
+          <p
+            id="authError"
+            class="auth-error hidden"
+            role="alert"
+          ></p>
+        </form>
+
+        <!-- Account test sau khi seed D1 -->
+        <div class="card auth-demo-card">
+          <b>デモアカウント</b>
+          <div class="muted auth-demo-text">
+            demo@kotoba.jp / kotoba123
+          </div>
+        </div>
+
+      </div>
+    </section>
+  </main>
+
+  <!-- Data từ điển fallback phía frontend -->
+  <script src="dictionary-data.js"></script>
+
+  <!-- Logic chung: auth, dashboard, dictionary, flashcard, conversation... -->
+  <script src="app.js"></script>
+</body>
+</html>

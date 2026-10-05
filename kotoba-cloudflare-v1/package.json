@@ -1,0 +1,18 @@
+{
+  "name": "kotoba-cloudflare",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:schema:local": "wrangler d1 execute kotoba-db --local --file=./database/schema.sql",
+    "db:seed:local": "wrangler d1 execute kotoba-db --local --file=./database/seed.sql",
+    "db:schema:remote": "wrangler d1 execute kotoba-db --remote --file=./database/schema.sql",
+    "db:seed:remote": "wrangler d1 execute kotoba-db --remote --file=./database/seed.sql",
+    "tail": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

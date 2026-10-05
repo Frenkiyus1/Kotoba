@@ -1,0 +1,26 @@
+KOTOBA — DEPLOY LÊN CLOUDFLARE (WINDOWS)
+========================================
+
+1) Giải nén folder này.
+2) Mở folder bằng VS Code.
+3) Chọn Terminal -> New Terminal.
+4) Copy đúng 1 lệnh sau và Enter:
+
+powershell -ExecutionPolicy Bypass -File .\scripts\deploy-first-time.ps1
+
+5) Khi trình duyệt Cloudflare mở ra -> bấm Allow / Authorize.
+6) Quay lại Terminal và chờ chạy xong.
+7) Cuối cùng Terminal sẽ cho URL dạng:
+
+https://kotoba.xxxxx.workers.dev
+
+TÀI KHOẢN TEST
+Email: demo@kotoba.jp
+Password: kotoba123
+
+SAU NÀY SỬA CODE
+Chỉ cần chạy:
+
+npm run deploy
+
+Nếu có lỗi, đọc README.md mục DEBUG.

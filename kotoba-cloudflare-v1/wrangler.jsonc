@@ -1,0 +1,23 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+
+  // Tên project hiển thị trong Cloudflare Workers.
+  "name": "kotoba",
+
+  // File backend chính.
+  "main": "src/index.js",
+
+  // Cố định runtime compatibility để deploy ổn định.
+  "compatibility_date": "2026-10-05",
+
+  // public/ chứa toàn bộ HTML, CSS, JS phía frontend và ảnh.
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  }
+
+  // KHÔNG cần tự viết database_id ở đây.
+  // Lệnh bên dưới sẽ tự thêm binding DB vào file này:
+  // npx wrangler d1 create kotoba-db --location=apac --binding=DB --update-config
+}

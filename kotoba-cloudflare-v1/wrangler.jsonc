@@ -1,25 +1,41 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
 
-  // Tên phải khớp tên Worker trên Cloudflare của bạn
   "name": "kobota",
 
-  // File backend chính
   "main": "src/index.js",
 
-  // Ngày tương thích runtime
   "compatibility_date": "2026-10-05",
 
-  // Frontend static
-  "assets": {
-    // Toàn bộ HTML/CSS/JS/ảnh nằm trong public
-    "directory": "./public",
+  // =========================================================
+  // CLOUDFLARE WORKERS AI
+  // Backend sử dụng bằng env.AI
+  // =========================================================
+  "ai": {
+    "binding": "AI"
+  },
 
-    // Cho Worker truy cập static assets khi cần
+  // =========================================================
+  // CLOUDFLARE D1 DATABASE
+  // Backend sử dụng bằng env.DB
+  // GIỮ database_id thật của bạn
+  // =========================================================
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "kotoba-db",
+      "database_id": "DATABASE_ID_CỦA_BẠN"
+    }
+  ],
+
+  // =========================================================
+  // STATIC FRONTEND
+  // =========================================================
+  "assets": {
+    "directory": "./public",
     "binding": "ASSETS",
 
-    // Chỉ request /api/* mới chạy backend trước
-    // HTML/CSS/JS/ảnh sẽ được Cloudflare phục vụ trực tiếp
+    // Chỉ API mới cần chạy backend trước
     "run_worker_first": [
       "/api/*"
     ]

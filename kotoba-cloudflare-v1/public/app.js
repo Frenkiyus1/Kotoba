@@ -74,17 +74,885 @@
   $$('[data-focus]').forEach(b=>b.addEventListener('click',startFocus));
 
   // Dictionary
-  initDictionary();
-  function initDictionary(){const root=$('.dictionary-enabled');if(!root)return;const state={text:'',context:'',rect:null,node:null};
-    const menu=document.createElement('div');menu.className='dictionary-context-menu';menu.innerHTML='<button type="button"><span class="jp">辞</span><span>辞書で調べる</span></button>';document.body.appendChild(menu);
-    const panel=document.createElement('section');panel.className='dictionary-panel';panel.innerHTML=`<div class="dictionary-panel-head"><div><span class="dictionary-label">AI学習サポート</span><strong id="dictSel"></strong></div><button class="dictionary-close">×</button></div><div id="dictGate" class="dictionary-gate"><div class="dictionary-ai-message"><span class="ai-mini jp">先</span><div><strong>どんなことを知りたいですか？</strong><p>日本語で聞いてください。意味、読み方、文法、使い方など、知りたいことを説明してみましょう。</p></div></div><form id="dictForm" class="dictionary-question-form"><textarea id="dictQuestion" rows="2" placeholder="例：この文ではどういう意味ですか？"></textarea><button class="btn btn-primary" type="submit">質問する</button></form><p id="dictStatus" class="dictionary-gate-status"></p></div><div id="dictResult" class="dictionary-result hidden"></div>`;document.body.appendChild(panel);
-    const readSel=()=>{const s=getSelection();if(!s||s.rangeCount===0||s.isCollapsed)return null;const text=norm(s.toString());if(!text||!hasJapanese(text))return null;const r=s.getRangeAt(0);const el=r.commonAncestorContainer.nodeType===1?r.commonAncestorContainer:r.commonAncestorContainer.parentElement;if(!el||!root.contains(el))return null;const ctx=el.closest('[data-dictionary-context]')||el.closest('.reading-surface')||el;const rect=r.getBoundingClientRect();if(!rect.width&&!rect.height)return null;return{text:text.slice(0,180),context:norm(ctx.textContent).slice(0,900),rect,node:ctx}};
-    const cache=()=>{const p=readSel();if(p)Object.assign(state,p)};document.addEventListener('selectionchange',()=>requestAnimationFrame(cache));root.addEventListener('mouseup',cache);root.addEventListener('keyup',cache);
-    const near=(x,y,r)=>r&&x>=r.left-16&&x<=r.right+16&&y>=r.top-16&&y<=r.bottom+16;
-    document.addEventListener('contextmenu',e=>{if(panel.contains(e.target)||menu.contains(e.target))return;const live=readSel();const p=live||(state.text&&near(e.clientX,e.clientY,state.rect)?state:null);if(!p)return;e.preventDefault();Object.assign(state,p);menu.style.left=Math.min(e.clientX,innerWidth-190)+'px';menu.style.top=Math.min(e.clientY,innerHeight-60)+'px';menu.classList.add('show')});
-    document.addEventListener('click',e=>{if(!menu.contains(e.target))menu.classList.remove('show')});menu.querySelector('button').onclick=()=>{menu.classList.remove('show');$('#dictSel').textContent=`「${state.text}」`;$('#dictGate').classList.remove('hidden');$('#dictResult').classList.add('hidden');$('#dictQuestion').value='';$('#dictStatus').textContent='';panel.classList.add('show');positionPanel(panel,state.rect);setTimeout(()=>$('#dictQuestion').focus(),40)};panel.querySelector('.dictionary-close').onclick=()=>panel.classList.remove('show');
-    $('#dictForm').onsubmit=async e=>{e.preventDefault();const q=norm($('#dictQuestion').value),status=$('#dictStatus');if(!hasJapanese(q)){status.textContent='日本語で質問してください。短い文でも大丈夫です。';status.className='dictionary-gate-status error';return}if(!/(意味|どういう|何|読み|使|文法|例文|違い|教えて|訳|ベトナム語|発音|品詞|この文|この場合)/.test(q)){status.textContent='もう少し具体的に聞いてください。';status.className='dictionary-gate-status error';return}status.textContent='質問の意図を確認しています…';const entry=await resolveEntry(state.text,state.context,q);if(!entry){status.textContent='この語句はデモ辞書にまだ登録されていません。辞書APIを接続すると検索範囲を拡張できます。';status.className='dictionary-gate-status error';return}renderEntry(entry,state.text);$('#dictGate').classList.add('hidden');$('#dictResult').classList.remove('hidden')};
+  // ============================================================
+// DICTIONARY — VOICE ONLY
+// ============================================================
+
+initDictionary();
+
+function initDictionary() {
+  const root = $('.dictionary-enabled');
+
+  // Trang nào không bật dictionary thì dừng.
+  if (!root) return;
+
+  const state = {
+    text: '',
+    context: '',
+    rect: null,
+    node: null
+  };
+
+  let recognition = null;
+  let isListening = false;
+
+  // ----------------------------------------------------------
+  // 1. Menu chuột phải
+  // ----------------------------------------------------------
+
+  const menu = document.createElement('div');
+
+  menu.className = 'dictionary-context-menu';
+
+  menu.innerHTML = `
+    <button type="button">
+      <span class="jp">辞</span>
+      <span>辞書で調べる</span>
+    </button>
+  `;
+
+  document.body.appendChild(menu);
+
+
+  // ----------------------------------------------------------
+  // 2. Dictionary panel
+  // Không còn textarea / nhập bằng bàn phím.
+  // ----------------------------------------------------------
+
+  const panel = document.createElement('section');
+
+  panel.className = 'dictionary-panel';
+
+  panel.innerHTML = `
+    <div class="dictionary-panel-head">
+
+      <div>
+        <span class="dictionary-label">
+          AI学習サポート
+        </span>
+
+        <strong id="dictSel"></strong>
+      </div>
+
+      <button
+        class="dictionary-close"
+        type="button"
+        aria-label="閉じる"
+      >
+        ×
+      </button>
+
+    </div>
+
+
+    <div
+      id="dictGate"
+      class="dictionary-gate"
+    >
+
+      <div class="dictionary-ai-message">
+
+        <span class="ai-mini jp">
+          先
+        </span>
+
+        <div>
+          <strong>
+            どんなことを知りたいですか？
+          </strong>
+
+          <p>
+            日本語で話してください。
+          </p>
+        </div>
+
+      </div>
+
+
+      <div class="dictionary-voice">
+
+        <button
+          id="dictMic"
+          class="dictionary-mic"
+          type="button"
+        >
+
+          <span
+            class="dictionary-mic-icon"
+            aria-hidden="true"
+          >
+            ●
+          </span>
+
+          <span id="dictMicLabel">
+            話してください
+          </span>
+
+        </button>
+
+
+        <div
+          id="dictTranscriptBox"
+          class="dictionary-transcript hidden"
+        >
+
+          <span class="dictionary-transcript-label">
+            あなた
+          </span>
+
+          <p id="dictTranscript"></p>
+
+        </div>
+
+
+        <p
+          id="dictStatus"
+          class="dictionary-gate-status"
+        ></p>
+
+      </div>
+
+    </div>
+
+
+    <div
+      id="dictResult"
+      class="dictionary-result hidden"
+    ></div>
+  `;
+
+  document.body.appendChild(panel);
+
+
+  // ----------------------------------------------------------
+  // 3. Đọc đoạn text hiện đang được bôi đen
+  // ----------------------------------------------------------
+
+  const readSel = () => {
+    const selection = getSelection();
+
+    if (
+      !selection ||
+      selection.rangeCount === 0 ||
+      selection.isCollapsed
+    ) {
+      return null;
+    }
+
+    const text =
+      norm(selection.toString());
+
+    // Chỉ xử lý text có tiếng Nhật.
+    if (
+      !text ||
+      !hasJapanese(text)
+    ) {
+      return null;
+    }
+
+    const range =
+      selection.getRangeAt(0);
+
+    const element =
+      range.commonAncestorContainer.nodeType === 1
+        ? range.commonAncestorContainer
+        : range.commonAncestorContainer.parentElement;
+
+    if (
+      !element ||
+      !root.contains(element)
+    ) {
+      return null;
+    }
+
+    const context =
+      element.closest('[data-dictionary-context]') ||
+      element.closest('.reading-surface') ||
+      element;
+
+    const rect =
+      range.getBoundingClientRect();
+
+    if (
+      !rect.width &&
+      !rect.height
+    ) {
+      return null;
+    }
+
+    return {
+      text: text.slice(0, 180),
+      context: norm(context.textContent).slice(0, 900),
+      rect,
+      node: context
+    };
+  };
+
+
+  // ----------------------------------------------------------
+  // 4. Cache selection
+  //
+  // Quan trọng:
+  // Browser đôi khi mất selection khi người dùng click chuột phải.
+  // ----------------------------------------------------------
+
+  const cacheSelection = () => {
+    const current = readSel();
+
+    if (current) {
+      Object.assign(
+        state,
+        current
+      );
+    }
+  };
+
+
+  document.addEventListener(
+    'selectionchange',
+    () => requestAnimationFrame(cacheSelection)
+  );
+
+  root.addEventListener(
+    'mouseup',
+    cacheSelection
+  );
+
+  root.addEventListener(
+    'keyup',
+    cacheSelection
+  );
+
+
+  // ----------------------------------------------------------
+  // 5. Kiểm tra chuột phải có gần selection hay không
+  // ----------------------------------------------------------
+
+  const nearSelection = (
+    x,
+    y,
+    rect
+  ) => {
+
+    return (
+      rect &&
+      x >= rect.left - 16 &&
+      x <= rect.right + 16 &&
+      y >= rect.top - 16 &&
+      y <= rect.bottom + 16
+    );
+
+  };
+
+
+  // ----------------------------------------------------------
+  // 6. Chuột phải -> hiện 辞書で調べる
+  // ----------------------------------------------------------
+
+  document.addEventListener(
+    'contextmenu',
+    event => {
+
+      if (
+        panel.contains(event.target) ||
+        menu.contains(event.target)
+      ) {
+        return;
+      }
+
+
+      const live =
+        readSel();
+
+
+      const selected =
+        live ||
+        (
+          state.text &&
+          nearSelection(
+            event.clientX,
+            event.clientY,
+            state.rect
+          )
+            ? state
+            : null
+        );
+
+
+      if (!selected) {
+        return;
+      }
+
+
+      event.preventDefault();
+
+
+      Object.assign(
+        state,
+        selected
+      );
+
+
+      menu.style.left =
+        Math.min(
+          event.clientX,
+          innerWidth - 190
+        ) + 'px';
+
+
+      menu.style.top =
+        Math.min(
+          event.clientY,
+          innerHeight - 60
+        ) + 'px';
+
+
+      menu.classList.add('show');
+
+    }
+  );
+
+
+  // ----------------------------------------------------------
+  // 7. Click ngoài -> đóng context menu
+  // ----------------------------------------------------------
+
+  document.addEventListener(
+    'click',
+    event => {
+
+      if (
+        !menu.contains(event.target)
+      ) {
+        menu.classList.remove('show');
+      }
+
+    }
+  );
+
+
+  // ----------------------------------------------------------
+  // 8. Mở dictionary voice gate
+  // ----------------------------------------------------------
+
+  menu
+    .querySelector('button')
+    .onclick = () => {
+
+      menu.classList.remove('show');
+
+
+      $('#dictSel').textContent =
+        `「${state.text}」`;
+
+
+      $('#dictGate')
+        .classList
+        .remove('hidden');
+
+
+      $('#dictResult')
+        .classList
+        .add('hidden');
+
+
+      $('#dictTranscriptBox')
+        .classList
+        .add('hidden');
+
+
+      $('#dictTranscript')
+        .textContent = '';
+
+
+      $('#dictStatus')
+        .textContent = '';
+
+
+      resetMicButton();
+
+
+      panel.classList.add('show');
+
+
+      positionPanel(
+        panel,
+        state.rect
+      );
+
+
+      // AI Teacher nói thật bằng tiếng Nhật.
+      speakJapanese(
+        'どんなことを知りたいですか？日本語で話してください。'
+      );
+
+    };
+
+
+  // ----------------------------------------------------------
+  // 9. Đóng panel
+  // ----------------------------------------------------------
+
+  panel
+    .querySelector('.dictionary-close')
+    .onclick = () => {
+
+      stopRecognition();
+
+      speechSynthesis.cancel();
+
+      panel.classList.remove('show');
+
+    };
+
+
+  // ----------------------------------------------------------
+  // 10. Microphone button
+  // ----------------------------------------------------------
+
+  $('#dictMic').onclick = () => {
+
+    if (isListening) {
+      stopRecognition();
+      return;
+    }
+
+    startDictionaryRecognition();
+
+  };
+
+
+  // ----------------------------------------------------------
+  // 11. Speech Recognition
+  // ----------------------------------------------------------
+
+  function startDictionaryRecognition() {
+
+    const SpeechRecognition =
+      window.SpeechRecognition ||
+      window.webkitSpeechRecognition;
+
+
+    const status =
+      $('#dictStatus');
+
+
+    // Browser không hỗ trợ microphone STT.
+    if (!SpeechRecognition) {
+
+      status.textContent =
+        'このブラウザでは音声認識を利用できません。';
+
+      status.className =
+        'dictionary-gate-status error';
+
+      return;
+    }
+
+
+    // Ngừng AI đang nói trước khi mở microphone.
+    speechSynthesis.cancel();
+
+
+    recognition =
+      new SpeechRecognition();
+
+
+    // Quan trọng: bắt buộc nhận dạng tiếng Nhật.
+    recognition.lang =
+      'ja-JP';
+
+
+    recognition.interimResults =
+      true;
+
+
+    recognition.continuous =
+      false;
+
+
+    recognition.maxAlternatives =
+      1;
+
+
+    isListening =
+      true;
+
+
+    $('#dictMic')
+      .classList
+      .add('listening');
+
+
+    $('#dictMicLabel')
+      .textContent =
+        '聞いています...';
+
+
+    status.textContent =
+      '日本語で質問してください。';
+
+
+    status.className =
+      'dictionary-gate-status';
+
+
+    // --------------------------------------------------------
+    // Nhận giọng nói
+    // --------------------------------------------------------
+
+    recognition.onresult = event => {
+
+      let transcript = '';
+      let finalTranscript = '';
+
+
+      for (
+        let i = event.resultIndex;
+        i < event.results.length;
+        i++
+      ) {
+
+        const result =
+          event.results[i];
+
+
+        transcript +=
+          result[0].transcript;
+
+
+        if (result.isFinal) {
+          finalTranscript +=
+            result[0].transcript;
+        }
+
+      }
+
+
+      $('#dictTranscriptBox')
+        .classList
+        .remove('hidden');
+
+
+      $('#dictTranscript')
+        .textContent =
+          transcript;
+
+
+      // Chỉ gửi sang AI khi câu nói hoàn tất.
+      if (finalTranscript) {
+
+        handleDictionaryVoiceQuestion(
+          finalTranscript
+        );
+
+      }
+
+    };
+
+
+    // --------------------------------------------------------
+    // Lỗi microphone
+    // --------------------------------------------------------
+
+    recognition.onerror = event => {
+
+      isListening =
+        false;
+
+
+      resetMicButton();
+
+
+      if (
+        event.error === 'not-allowed'
+      ) {
+
+        status.textContent =
+          'マイクの使用を許可してください。';
+
+      } else {
+
+        status.textContent =
+          '音声を認識できませんでした。もう一度話してください。';
+
+      }
+
+
+      status.className =
+        'dictionary-gate-status error';
+
+    };
+
+
+    recognition.onend = () => {
+
+      isListening =
+        false;
+
+
+      resetMicButton();
+
+    };
+
+
+    try {
+
+      recognition.start();
+
+    } catch (error) {
+
+      console.error(
+        'SpeechRecognition:',
+        error
+      );
+
+    }
+
   }
+
+
+  // ----------------------------------------------------------
+  // 12. Xử lý câu hỏi người học vừa nói
+  // ----------------------------------------------------------
+
+  async function handleDictionaryVoiceQuestion(
+    spokenText
+  ) {
+
+    const question =
+      norm(spokenText);
+
+
+    const status =
+      $('#dictStatus');
+
+
+    // --------------------------------------------------------
+    // Không phải tiếng Nhật
+    // --------------------------------------------------------
+
+    if (
+      !hasJapanese(question)
+    ) {
+
+      status.textContent =
+        '日本語で聞いてみましょう。';
+
+
+      status.className =
+        'dictionary-gate-status error';
+
+
+      speakJapanese(
+        '日本語で聞いてみましょう。'
+      );
+
+
+      return;
+
+    }
+
+
+    // --------------------------------------------------------
+    // Câu nói quá mơ hồ
+    //
+    // Ví dụ:
+    // はい
+    // いいえ
+    // わかりました
+    // --------------------------------------------------------
+
+    const meaningfulQuestion =
+      /(意味|どういう|何|なに|読み|よみ|使|つか|文法|例文|違い|教えて|訳|発音|品詞|この文|この場合|知りたい)/;
+
+
+    if (
+      !meaningfulQuestion.test(question)
+    ) {
+
+      status.textContent =
+        'もう少し詳しく質問してみましょう。';
+
+
+      status.className =
+        'dictionary-gate-status error';
+
+
+      speakJapanese(
+        'もう少し詳しく質問してみましょう。'
+      );
+
+
+      return;
+
+    }
+
+
+    // --------------------------------------------------------
+    // AI đã hiểu câu hỏi
+    // --------------------------------------------------------
+
+    status.textContent =
+      '考えています...';
+
+
+    status.className =
+      'dictionary-gate-status';
+
+
+    const entry =
+      await resolveEntry(
+        state.text,
+        state.context,
+        question
+      );
+
+
+    // --------------------------------------------------------
+    // Không tìm được dictionary entry
+    // --------------------------------------------------------
+
+    if (!entry) {
+
+      status.textContent =
+        'この語句はまだ辞書に登録されていません。';
+
+
+      status.className =
+        'dictionary-gate-status error';
+
+
+      speakJapanese(
+        'この語句はまだ辞書に登録されていません。'
+      );
+
+
+      return;
+
+    }
+
+
+    // --------------------------------------------------------
+    // Thành công -> mở dictionary
+    // --------------------------------------------------------
+
+    speakJapanese(
+      'わかりました。辞書を開きます。'
+    );
+
+
+    renderEntry(
+      entry,
+      state.text
+    );
+
+
+    $('#dictGate')
+      .classList
+      .add('hidden');
+
+
+    $('#dictResult')
+      .classList
+      .remove('hidden');
+
+  }
+
+
+  // ----------------------------------------------------------
+  // 13. Dừng microphone
+  // ----------------------------------------------------------
+
+  function stopRecognition() {
+
+    if (!recognition) return;
+
+
+    try {
+      recognition.stop();
+    } catch (_) {}
+
+
+    recognition =
+      null;
+
+
+    isListening =
+      false;
+
+
+    resetMicButton();
+
+  }
+
+
+  // ----------------------------------------------------------
+  // 14. Reset trạng thái button microphone
+  // ----------------------------------------------------------
+
+  function resetMicButton() {
+
+    $('#dictMic')
+      ?.classList
+      .remove('listening');
+
+
+    const label =
+      $('#dictMicLabel');
+
+
+    if (label) {
+
+      label.textContent =
+        '話してください';
+
+    }
+
+  }
+
+
+  // ----------------------------------------------------------
+  // 15. Text To Speech — AI Teacher nói tiếng Nhật
+  // ----------------------------------------------------------
+
+  function speakJapanese(text) {
+
+    if (
+      !('speechSynthesis' in window)
+    ) {
+      return;
+    }
+
+
+    speechSynthesis.cancel();
+
+
+    const speech =
+      new SpeechSynthesisUtterance(
+        text
+      );
+
+
+    speech.lang =
+      'ja-JP';
+
+
+    speech.rate =
+      0.92;
+
+
+    speech.pitch =
+      1;
+
+
+    speechSynthesis.speak(
+      speech
+    );
+
+  }
+
+}
   function positionPanel(p,r){const w=Math.min(440,innerWidth-24);p.style.width=w+'px';let left=r?.left||16,top=(r?.bottom||80)+12;left=Math.max(12,Math.min(left,innerWidth-w-12));if(top+590>innerHeight)top=Math.max(12,(r?.top||450)-470);p.style.left=left+'px';p.style.top=top+'px'}
   async function resolveEntry(sel,ctx,q){if(window.KOTOBA_DICTIONARY_ENDPOINT){try{const res=await fetch(window.KOTOBA_DICTIONARY_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({selection:sel,context:ctx,question:q})});if(res.ok)return await res.json()}catch(e){}}
     const exact=window.KOTOBA_PHRASES?.[sel]||window.KOTOBA_DICTIONARY?.[sel];if(exact)return Object.assign({term:sel},exact);const keys=Object.keys(window.KOTOBA_DICTIONARY||{}).filter(k=>sel.includes(k)).sort((a,b)=>b.length-a.length);if(keys.length)return Object.assign({term:keys[0]},window.KOTOBA_DICTIONARY[keys[0]]);return null}

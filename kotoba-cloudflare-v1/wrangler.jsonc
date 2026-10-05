@@ -1,23 +1,27 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
 
-  // Tên project hiển thị trong Cloudflare Workers.
-  "name": "kotoba",
+  // Tên phải khớp tên Worker trên Cloudflare của bạn
+  "name": "kobota",
 
-  // File backend chính.
+  // File backend chính
   "main": "src/index.js",
 
-  // Cố định runtime compatibility để deploy ổn định.
+  // Ngày tương thích runtime
   "compatibility_date": "2026-10-05",
 
-  // public/ chứa toàn bộ HTML, CSS, JS phía frontend và ảnh.
+  // Frontend static
   "assets": {
+    // Toàn bộ HTML/CSS/JS/ảnh nằm trong public
     "directory": "./public",
-    "binding": "ASSETS",
-    "run_worker_first": true
-  }
 
-  // KHÔNG cần tự viết database_id ở đây.
-  // Lệnh bên dưới sẽ tự thêm binding DB vào file này:
-  // npx wrangler d1 create kotoba-db --location=apac --binding=DB --update-config
+    // Cho Worker truy cập static assets khi cần
+    "binding": "ASSETS",
+
+    // Chỉ request /api/* mới chạy backend trước
+    // HTML/CSS/JS/ảnh sẽ được Cloudflare phục vụ trực tiếp
+    "run_worker_first": [
+      "/api/*"
+    ]
+  }
 }

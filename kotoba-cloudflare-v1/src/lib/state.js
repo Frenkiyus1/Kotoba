@@ -20,6 +20,7 @@ function safeJsonParse(value, fallback) {
 export function defaultPrefs() {
   return {
     level: 'N5',
+    onboarding_completed: 0,
     goal: 'JLPT',
     minutes: '20',
     period: '夜',
@@ -33,6 +34,7 @@ function prefsFromRow(row) {
 
   return {
     level: row.level,
+    onboarding_completed: Number(row.onboarding_completed || 0),
     goal: row.goal,
     minutes: row.minutes,
     period: row.period,
@@ -206,18 +208,22 @@ export async function saveStateSection(env, userId, section, value) {
 
   if (section === 'prefs') {
     const v = isPlainObject(value) ? value : {};
+    if (!['N5', 'N4', 'N3', 'N2', 'N1'].includes(v.level)) {
+      throw new HttpError(400, 'JLPTレベルを選択してください。');
+    }
 
     await env.DB.prepare(
       `INSERT INTO preferences
-       (user_id, level, goal, minutes, period, study_time, bio_interest)
-       VALUES(?, ?, ?, ?, ?, ?, ?)
+       (user_id, level, goal, minutes, period, study_time, bio_interest, onboarding_completed)
+       VALUES(?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(user_id) DO UPDATE SET
          level = excluded.level,
          goal = excluded.goal,
          minutes = excluded.minutes,
          period = excluded.period,
          study_time = excluded.study_time,
-         bio_interest = excluded.bio_interest`,
+         bio_interest = excluded.bio_interest,
+         onboarding_completed = MAX(preferences.onboarding_completed, excluded.onboarding_completed)`,
     )
       .bind(
         userId,
@@ -227,6 +233,7 @@ export async function saveStateSection(env, userId, section, value) {
         v.period || '夜',
         v.studyTime || '20:30',
         v.bioInterest === false ? 0 : 1,
+        v.onboarding_completed === 1 ? 1 : 0,
       )
       .run();
     return;

@@ -31,6 +31,7 @@ CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 CREATE TABLE IF NOT EXISTS preferences (
   user_id      INTEGER PRIMARY KEY,
   level        TEXT NOT NULL DEFAULT 'N5',
+  onboarding_completed INTEGER NOT NULL DEFAULT 0,
   goal         TEXT NOT NULL DEFAULT 'JLPT',
   minutes      TEXT NOT NULL DEFAULT '20',
   period       TEXT NOT NULL DEFAULT '夜',

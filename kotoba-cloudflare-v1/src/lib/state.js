@@ -1,8 +1,8 @@
 import { HttpError, isPlainObject } from './http.js';
 
 /**
- * Toàn bộ logic đọc/ghi trạng thái học tập trong D1.
- * Frontend cũ dùng localStorage; Worker đồng bộ các section này lên cloud.
+ * D1-backed learner state for KOTOBA.
+ * New accounts start with clean progress and must complete JLPT onboarding.
  */
 
 export function todayISO() {
@@ -20,12 +20,12 @@ function safeJsonParse(value, fallback) {
 export function defaultPrefs() {
   return {
     level: 'N5',
-    onboarding_completed: 0,
     goal: 'JLPT',
     minutes: '20',
     period: '夜',
     studyTime: '20:30',
     bioInterest: true,
+    onboardingCompleted: false,
   };
 }
 
@@ -33,78 +33,32 @@ function prefsFromRow(row) {
   if (!row) return defaultPrefs();
 
   return {
-    level: row.level,
-    onboarding_completed: Number(row.onboarding_completed || 0),
-    goal: row.goal,
-    minutes: row.minutes,
-    period: row.period,
-    studyTime: row.study_time,
+    level: row.level || 'N5',
+    goal: row.goal || 'JLPT',
+    minutes: row.minutes || '20',
+    period: row.period || '夜',
+    studyTime: row.study_time || '20:30',
     bioInterest: Boolean(row.bio_interest),
+    onboardingCompleted: Boolean(row.onboarding_completed),
   };
 }
 
-/** Tạo dữ liệu mẫu cho user mới để demo web có nội dung ngay sau khi đăng ký. */
+/**
+ * Create a CLEAN learner profile for a newly registered user.
+ * Demo/sample data belongs in seed.sql only, not in real user registration.
+ */
 export async function seedUser(env, userId) {
-  const today = todayISO();
-
   const statements = [
     env.DB.prepare(
       `INSERT OR REPLACE INTO preferences
-       (user_id, level, goal, minutes, period, study_time, bio_interest)
-       VALUES(?, 'N5', 'JLPT', '25', '夜', '20:30', 1)`,
-    ).bind(userId),
-
-    env.DB.prepare(
-      `INSERT OR IGNORE INTO vocabulary
-       (user_id, term, reading, meaning, example, source, stage, interval_days,
-        due, reviews, exposures, last_seen)
-       VALUES(?, '学校', 'がっこう', 'trường học; nhà trường',
-              '毎朝八時に学校へ行きます。', 'N5', 0, 0, ?, 0, 1, ?)`,
-    ).bind(userId, today, today),
-
-    env.DB.prepare(
-      `INSERT OR IGNORE INTO vocabulary
-       (user_id, term, reading, meaning, example, source, stage, interval_days,
-        due, reviews, exposures, last_seen)
-       VALUES(?, '昨日', 'きのう', 'hôm qua',
-              '昨日、図書館へ行きました。', 'N5', 1, 1, ?, 1, 1, ?)`,
-    ).bind(userId, today, today),
-
-    env.DB.prepare(
-      `INSERT OR IGNORE INTO vocabulary
-       (user_id, term, reading, meaning, example, source, stage, interval_days,
-        due, reviews, exposures, last_seen)
-       VALUES(?, '友達', 'ともだち', 'bạn; bạn bè',
-              '友達と一緒に昼ご飯を食べます。', 'N5', 0, 0, ?, 0, 1, ?)`,
-    ).bind(userId, today, today),
-
-    env.DB.prepare(
-      `INSERT OR IGNORE INTO vocabulary
-       (user_id, term, reading, meaning, example, source, stage, interval_days,
-        due, reviews, exposures, last_seen)
-       VALUES(?, '細胞膜', 'さいぼうまく', 'màng tế bào',
-              '細胞膜は細胞の内側と外側を分けています。', '生物', 2, 3, ?, 2, 1, ?)`,
-    ).bind(userId, today, today),
-
-    env.DB.prepare(
-      `INSERT OR IGNORE INTO errors(user_id, error_key, error_type, count)
-       VALUES(?, 'は / が', '文法', 5)`,
-    ).bind(userId),
-
-    env.DB.prepare(
-      `INSERT OR IGNORE INTO errors(user_id, error_key, error_type, count)
-       VALUES(?, '過去形', '文法', 3)`,
-    ).bind(userId),
-
-    env.DB.prepare(
-      `INSERT OR IGNORE INTO errors(user_id, error_key, error_type, count)
-       VALUES(?, '聞き取り', '聴解', 2)`,
+       (user_id, level, goal, minutes, period, study_time, bio_interest, onboarding_completed)
+       VALUES(?, 'N5', 'JLPT', '20', '夜', '20:30', 1, 0)`,
     ).bind(userId),
 
     env.DB.prepare(
       `INSERT OR REPLACE INTO activity(user_id, total_minutes, streak, days_json)
-       VALUES(?, 186, 7, ?)`,
-    ).bind(userId, JSON.stringify({ [today]: 12 })),
+       VALUES(?, 0, 0, '{}')`,
+    ).bind(userId),
   ];
 
   await env.DB.batch(statements);
@@ -153,7 +107,7 @@ async function errorsFor(env, userId) {
   }));
 }
 
-/** Trả toàn bộ state mà app.js cần sau khi login / refresh. */
+/** Return complete app state after register/login/refresh. */
 export async function stateFor(env, userId) {
   const user = await env.DB.prepare(
     'SELECT id, name, email, created_at FROM users WHERE id = ?',
@@ -195,7 +149,7 @@ export async function stateFor(env, userId) {
   };
 }
 
-/** Ghi một section state từ frontend vào D1. */
+/** Persist one app state section to D1. */
 export async function saveStateSection(env, userId, section, value) {
   if (section === 'user') {
     if (isPlainObject(value) && String(value.name || '').trim()) {
@@ -208,9 +162,7 @@ export async function saveStateSection(env, userId, section, value) {
 
   if (section === 'prefs') {
     const v = isPlainObject(value) ? value : {};
-    if (!['N5', 'N4', 'N3', 'N2', 'N1'].includes(v.level)) {
-      throw new HttpError(400, 'JLPTレベルを選択してください。');
-    }
+    const level = ['N5', 'N4', 'N3', 'N2', 'N1'].includes(v.level) ? v.level : 'N5';
 
     await env.DB.prepare(
       `INSERT INTO preferences
@@ -223,17 +175,17 @@ export async function saveStateSection(env, userId, section, value) {
          period = excluded.period,
          study_time = excluded.study_time,
          bio_interest = excluded.bio_interest,
-         onboarding_completed = MAX(preferences.onboarding_completed, excluded.onboarding_completed)`,
+         onboarding_completed = excluded.onboarding_completed`,
     )
       .bind(
         userId,
-        v.level || 'N5',
+        level,
         v.goal || 'JLPT',
         String(v.minutes || '20'),
         v.period || '夜',
         v.studyTime || '20:30',
         v.bioInterest === false ? 0 : 1,
-        v.onboarding_completed === 1 ? 1 : 0,
+        v.onboardingCompleted ? 1 : 0,
       )
       .run();
     return;
@@ -327,5 +279,5 @@ export async function saveStateSection(env, userId, section, value) {
     return;
   }
 
-  throw new HttpError(404, '不明なセクションです。');
+  throw new HttpError(404, '保存対象が見つかりません。');
 }

@@ -50,23 +50,7 @@ The included dictionary is a local demo dataset. For full Japanese-Vietnamese co
 
 ## AI conversation hook
 
-The demo uses local Japanese-only heuristics. To connect a real AI backend, set:
-
-```js
-window.KOTOBA_AI_ENDPOINT = "https://your-api.example.com/chat";
-```
-
-Expected request:
-
-```json
-{ "scenario": "学校", "text": "...", "language": "ja" }
-```
-
-Expected response:
-
-```json
-{ "reply": "..." }
-```
+The frontend calls `/api/ai/conversation` with the scenario, current text and up to 20 previous messages. The Worker calls Cloudflare Workers AI using the `AI` binding and the learner level stored in D1. API errors are visible and the learner can retry; changing scenarios resets conversation history.
 
 ## Storage
 

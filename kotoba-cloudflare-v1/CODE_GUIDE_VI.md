@@ -84,9 +84,7 @@ Muốn thêm từ demo thì sửa file data này.
 
 Đây là vị trí dành cho **AI teacher**.
 
-Hiện tại nó chỉ dùng rule-based response để project chạy mà không cần API key.
-
-Sau này nếu dùng LLM thật, thay logic ở file này.
+Route gọi Cloudflare Workers AI qua `env.AI.run`, lấy trình độ từ D1 và gửi lịch sử hội thoại. Lỗi AI được trả rõ ràng cho frontend.
 
 ## 9. `database/schema.sql`
 

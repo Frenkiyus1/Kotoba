@@ -13,8 +13,8 @@ VALUES(
   CAST(strftime('%s', 'now') AS INTEGER)
 );
 
-INSERT OR REPLACE INTO preferences(user_id, level, goal, minutes, period, study_time, bio_interest)
-SELECT id, 'N5', 'JLPT', '25', '夜', '20:30', 1
+INSERT OR REPLACE INTO preferences(user_id, level, goal, minutes, period, study_time, bio_interest, onboarding_completed)
+SELECT id, 'N5', 'JLPT', '25', '夜', '20:30', 1, 1
 FROM users
 WHERE email = 'demo@kotoba.jp';
 

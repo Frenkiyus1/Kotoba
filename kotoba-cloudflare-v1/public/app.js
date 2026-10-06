@@ -41,24 +41,24 @@
   if(protectedPages.has(document.body.dataset.page)&&!localStorage.getItem(STORE.token)){location.replace('start.html');return}
   if(protectedPages.has(document.body.dataset.page)){
     if(!hydrated){document.body.innerHTML='<p role="alert">学習設定を読み込めませんでした。再読み込みしてください。</p>';return}
-    if(serverPrefs.onboarding_completed!==1&&document.body.dataset.page!=='onboarding'){location.replace('onboarding.html');return}
-    if(serverPrefs.onboarding_completed===1&&document.body.dataset.page==='onboarding'){location.replace('dashboard.html');return}
+    if(!serverPrefs.onboardingCompleted&&document.body.dataset.page!=='onboarding'){location.replace('onboarding.html');return}
+    if(serverPrefs.onboardingCompleted&&document.body.dataset.page==='onboarding'){location.replace('dashboard.html');return}
   }
   applyLanguageMode();
   ensureSeed();
 
   // global start links
-  $$('.js-start').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();location.href=localStorage.getItem(STORE.token)?(serverPrefs?.onboarding_completed===1?'dashboard.html':'onboarding.html'):'start.html'}));
+  $$('.js-start').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();location.href=localStorage.getItem(STORE.token)?(serverPrefs?.onboardingCompleted?'dashboard.html':'onboarding.html'):'start.html'}));
 
   // auth page
   const authTabs=$$('.auth-tabs button');
   if(authTabs.length){authTabs.forEach(btn=>btn.addEventListener('click',()=>{authTabs.forEach(x=>x.classList.remove('active'));btn.classList.add('active');$('#authMode').value=btn.dataset.mode;$('#nameField').classList.toggle('hidden',btn.dataset.mode==='login');$('#authSubmit').textContent=btn.dataset.mode==='login'?'学習を始める':'アカウントを作って始める'}));
-    $('#authForm')?.addEventListener('submit',async e=>{e.preventDefault();const mode=$('#authMode').value;const email=$('#authEmail').value.trim();const password=$('#authPassword').value;const err=$('#authError');if(err){err.textContent='';err.classList.add('hidden')}try{const payload=mode==='register'?{name:$('#authName').value.trim()||'学習者',email,password}:{email,password};const result=await api(mode==='register'?'/auth/register':'/auth/login',{method:'POST',body:JSON.stringify(payload)});localStorage.setItem(STORE.token,result.token);applyServerState(result.state);location.href=result.state.prefs.onboarding_completed===1?'dashboard.html':'onboarding.html'}catch(ex){if(err){err.textContent=ex.message||'ログインできませんでした。';err.classList.remove('hidden')}else toast(ex.message||'ログインできませんでした。')}});
+    $('#authForm')?.addEventListener('submit',async e=>{e.preventDefault();const mode=$('#authMode').value;const email=$('#authEmail').value.trim();const password=$('#authPassword').value;const err=$('#authError');if(err){err.textContent='';err.classList.add('hidden')}try{const payload=mode==='register'?{name:$('#authName').value.trim()||'学習者',email,password}:{email,password};const result=await api(mode==='register'?'/auth/register':'/auth/login',{method:'POST',body:JSON.stringify(payload)});localStorage.setItem(STORE.token,result.token);applyServerState(result.state);location.href=result.state.prefs.onboardingCompleted?'dashboard.html':'onboarding.html'}catch(ex){if(err){err.textContent=ex.message||'ログインできませんでした。';err.classList.remove('hidden')}else toast(ex.message||'ログインできませんでした。')}});
   }
 
   // onboarding
   const onboard=$('#onboardingForm');
-  if(onboard){let level=null;const button=$('#nextStep');$$('.choice',onboard).forEach(c=>c.addEventListener('click',()=>{level=c.dataset.value;$$('.choice',onboard).forEach(x=>{const selected=x===c;x.classList.toggle('selected',selected);x.setAttribute('aria-pressed',String(selected))});button.disabled=false}));onboard.addEventListener('submit',async e=>{e.preventDefault();if(!level)return;button.disabled=true;const error=$('#onboardingError');error.classList.add('hidden');try{await persistPrefs({...serverPrefs,level,onboarding_completed:1});location.href='dashboard.html'}catch(ex){error.textContent=ex.message||'保存できませんでした。もう一度お試しください。';error.classList.remove('hidden');button.disabled=false}});}
+  if(onboard){let level=null;const button=$('#nextStep');$$('.choice',onboard).forEach(c=>c.addEventListener('click',()=>{level=c.dataset.value;$$('.choice',onboard).forEach(x=>{const selected=x===c;x.classList.toggle('selected',selected);x.setAttribute('aria-pressed',String(selected))});button.disabled=false}));onboard.addEventListener('submit',async e=>{e.preventDefault();if(!level)return;button.disabled=true;const error=$('#onboardingError');error.classList.add('hidden');try{await persistPrefs({...serverPrefs,level,onboardingCompleted:true});location.href='dashboard.html'}catch(ex){error.textContent=ex.message||'保存できませんでした。もう一度お試しください。';error.classList.remove('hidden');button.disabled=false}});}
 
 
   // dashboard
@@ -983,9 +983,49 @@ function initDictionary() {
 
   // conversation
   if(document.body.dataset.page==='conversation')initConversation();
-  function initConversation(){let scenario='コンビニ';const log=$('#chatLog');const prompts={コンビニ:'いらっしゃいませ。今日は何をお探しですか？',レストラン:'いらっしゃいませ。何名様ですか？',学校:'今日は学校で何を勉強しましたか？',友達:'今日はどうだった？何か面白いことがあった？',駅:'どこまで行きたいですか？',旅行:'日本ではどこへ行ってみたいですか？',自由会話:'こんにちは。今日は何について話したいですか？'};const add=(who,text)=>{const d=document.createElement('div');d.className=`bubble ${who}`;d.textContent=text;log.appendChild(d);log.scrollTop=log.scrollHeight};add('teacher',prompts[scenario]);$$('.scenario-btn').forEach(b=>b.addEventListener('click',()=>{$$('.scenario-btn').forEach(x=>x.classList.remove('active'));b.classList.add('active');scenario=b.dataset.scenario;log.innerHTML='';add('teacher',prompts[scenario])}));$('#chatForm').onsubmit=async e=>{e.preventDefault();const input=$('#chatText');const text=norm(input.value);if(!text)return;add('student',text);input.value='';if(!hasJapanese(text)){add('teacher','日本語で話してみましょう。短い文でも大丈夫です。');return}const reply=await aiReply(scenario,text);setTimeout(()=>add('teacher',reply),400)};$('#conversationMic')?.addEventListener('click',()=>startRecognition('chatText',$('#conversationMic')))}
-  async function aiReply(scenario,text){try{const d=await api('/ai/conversation',{method:'POST',body:JSON.stringify({scenario,text,language:'ja'})});if(d?.reply||d?.text)return d.reply||d.text}catch(e){}
-    if(/分から|わから/.test(text))return '大丈夫です。簡単な日本語で言い換えますね。どの言葉が難しかったですか？';if(scenario==='学校')return /勉強|学/.test(text)?'そうですか。いちばん面白かったことは何ですか？':'学校では誰とよく話しますか？';if(scenario==='コンビニ')return /ください|欲しい|ほしい/.test(text)?'はい。こちらですね。ほかに必要なものはありますか？':'何を買いたいですか？';if(scenario==='レストラン')return /一人|二人|三人|ひとり|ふたり/.test(text)?'かしこまりました。こちらへどうぞ。何を注文しますか？':'何名様ですか？';if(scenario==='駅')return '分かりました。切符を買いますか、それともICカードを使いますか？';return 'いいですね。もう少し詳しく教えてください。'}
+  function initConversation(){
+    let scenario='コンビニ', history=[], busy=false, generation=0;
+    const log=$('#chatLog'), input=$('#chatText'), submit=$('#chatForm button[type="submit"]');
+    const prompts={コンビニ:'いらっしゃいませ。今日は何をお探しですか？',レストラン:'いらっしゃいませ。何名様ですか？',学校:'今日は学校で何を勉強しましたか？',友達:'今日はどうだった？何か面白いことがあった？',駅:'どこまで行きたいですか？',旅行:'日本ではどこへ行ってみたいですか？',自由会話:'こんにちは。今日は何について話したいですか？'};
+    const add=(who,text)=>{const d=document.createElement('div');d.className=`bubble ${who}`;d.textContent=text;log.appendChild(d);log.scrollTop=log.scrollHeight;return d};
+    const reset=()=>{generation++;history=[{role:'assistant',content:prompts[scenario]}];log.replaceChildren();add('teacher',prompts[scenario]);input.value='';$('#chatError').classList.add('hidden')};
+    reset();
+    $$('.scenario-btn').forEach(b=>b.addEventListener('click',()=>{$$('.scenario-btn').forEach(x=>x.classList.remove('active'));b.classList.add('active');scenario=b.dataset.scenario;reset()}));
+    $('#chatForm').onsubmit=async e=>{
+      e.preventDefault();if(busy)return;
+      const text=norm(input.value);if(!text)return;
+      if(!hasJapanese(text)){add('teacher','日本語で話してみましょう。短い文でも大丈夫です。');return}
+      if(text.length>2000){toast('2000文字以内で入力してください。');return}
+      const current=generation, student=add('student',text);input.value='';
+      const pending=add('teacher','考えています…');busy=true;submit.disabled=true;
+      try{
+        const reply=await aiReply(scenario,text,history.slice(-20));
+        if(current!==generation)return;
+        pending.textContent=reply;
+        history.push({role:'user',content:text},{role:'assistant',content:reply});
+        history=history.slice(-20);
+      }catch(error){
+        if(current!==generation)return;
+        pending.remove();student.remove();if(!input.value)input.value=text;
+        $('#chatError').textContent=error.message||'返答を取得できませんでした。もう一度お試しください。';
+        $('#chatError').classList.remove('hidden');
+      }finally{busy=false;submit.disabled=false;log.scrollTop=log.scrollHeight}
+    };
+    $('#chatForm').addEventListener('submit',()=>$('#chatError').classList.add('hidden'));
+    $('#conversationMic')?.addEventListener('click',()=>startRecognition('chatText',$('#conversationMic')));
+  }
+  async function aiReply(scenario,text,history){
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),45000);
+    try{
+      const d=await api('/ai/conversation',{method:'POST',body:JSON.stringify({scenario,text,history}),signal:controller.signal});
+      if(typeof d?.reply!=='string'||!d.reply.trim())throw new Error('AIの返答が空でした。もう一度お試しください。');
+      return d.reply;
+    }catch(error){
+      if(error.name==='AbortError')throw new Error('AIの応答に時間がかかっています。もう一度お試しください。');
+      throw error;
+    }finally{clearTimeout(timer)}
+  }
 
   // personalized
   if(document.body.dataset.page==='personalized')initPersonalized();

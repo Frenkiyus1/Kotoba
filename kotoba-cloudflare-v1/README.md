@@ -168,7 +168,7 @@ kotoba-cloudflare-v1/
 │   │   ├── state.js        # Progress / preferences / deck
 │   │   ├── vocabulary.js   # Flashcard + SRS
 │   │   ├── dictionary.js   # Dictionary endpoint
-│   │   └── conversation.js # Conversation demo
+│   │   └── conversation.js # Workers AI conversation
 │   └── data/
 │       └── dictionary.js   # Data từ điển demo
 │
@@ -211,22 +211,31 @@ POST /api/ai/conversation
 
 # AI CỦA BẢN NÀY LÀ GÌ?
 
-**Chưa dùng LLM thật.**
+Hội thoại gọi **Cloudflare Workers AI** qua binding `AI` trong `wrangler.jsonc`.
+Model mặc định: `@cf/meta/llama-3.1-8b-instruct`; có thể đặt biến `AI_MODEL` để đổi model.
+Backend lấy trình độ từ D1 và nhận tối đa 20 tin nhắn lịch sử. Khi AI lỗi, giao diện hiển thị lỗi và giữ câu hỏi để gửi lại.
 
-Endpoint:
+Binding `DB` đã được cấu hình trong `d1_databases` của `wrangler.jsonc` để kết nối database `kotoba-db` hiện có. Đăng ký, đăng nhập và hội thoại đều dùng database này; không cần tạo database mới.
 
-```text
-POST /api/ai/conversation
+## Chọn trình độ cho tài khoản mới
+
+Đăng ký → chọn N5–N1 → lưu `onboardingCompleted: true` → dashboard. Đăng nhập lại dùng trình độ đã lưu và không hỏi lại. Tài khoản chưa hoàn tất bước này sẽ được đưa về trang chọn trình độ.
+
+Nếu database cũ chưa có cột `onboarding_completed`, chạy **một lần**:
+
+```powershell
+npx wrangler d1 execute kotoba-db --remote --file=./database/migration-onboarding.sql --yes
 ```
 
-hiện dùng rule-based demo để web chạy ngay mà không cần API key hoặc trả phí.
-File cần thay khi nối AI thật:
+Không chạy migration này nếu cột đã tồn tại. Migration giữ trình độ của người học cũ và đánh dấu đã hoàn tất; tài khoản mới vẫn bắt đầu chưa hoàn tất. Tài khoản demo trong seed được đánh dấu đã chọn trình độ.
 
-```text
-src/routes/conversation.js
+## Kiểm tra sửa lỗi
+
+```powershell
+npm.cmd test
 ```
 
-Có thể nối Cloudflare Workers AI hoặc OpenAI sau mà không cần viết lại frontend.
+Các kiểm tra dùng SQLite trong bộ nhớ và AI giả lập, không gọi tài khoản Cloudflare thật. Cần Node.js 22.13 trở lên.
 
 ---
 

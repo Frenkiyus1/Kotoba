@@ -13,14 +13,6 @@
     "binding": "AI"
   },
 
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "kotoba-db",
-      "database_id": "e12223a8-cb42-4dda-b6f1-f2d832566ab8"
-    }
-  ],
-
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",

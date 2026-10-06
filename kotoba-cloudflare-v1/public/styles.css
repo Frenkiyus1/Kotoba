@@ -300,3 +300,6 @@
   }
 
 }
+
+/* Language controls and user guide */
+#uiLanguage{padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--surface,#fff);color:var(--text,#222);max-width:130px}.nav-actions{flex-wrap:wrap}.guide-index{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:24px}.guide-section{padding:24px;margin-bottom:20px;scroll-margin-top:100px}.guide-section p{line-height:1.9}[data-guide-language][hidden]{display:none!important}@media(max-width:640px){.nav-actions .btn{padding:8px;font-size:12px}#uiLanguage{max-width:110px}.guide-section{padding:18px}}

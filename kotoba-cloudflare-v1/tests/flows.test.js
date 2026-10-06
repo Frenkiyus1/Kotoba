@@ -98,24 +98,24 @@ class Element {
 }
 async function frontend(page, prefs, extra = {}) {
   const elements = {};
-  for (const id of ['onboardingForm', 'nextStep', 'onboardingError', 'chatLog', 'chatText', 'chatForm', 'chatError']) elements[`#${id}`] = new Element();
+  for (const id of ['onboardingForm', 'nextStep', 'onboardingError', 'chatLog', 'chatText', 'chatForm', 'chatError', 'conversationMic']) elements[`#${id}`] = new Element();
   elements['#onboardingForm'].choices = ['N5', 'N4', 'N3', 'N2', 'N1'].map(level => { const el = new Element(); el.dataset.value = level; return el; });
   if (page !== 'onboarding') delete elements['#onboardingForm'];
   elements['#chatForm button[type="submit"]'] = new Element();
   const scenarios = ['コンビニ', '学校'].map(scenario => { const el = new Element(); el.dataset.scenario = scenario; return el; });
   const body = new Element(); body.dataset.page = page;
-  const document = { body, head: new Element(), createElement: () => new Element(), querySelector: s => elements[s] ?? null, querySelectorAll: s => s === '.scenario-btn' ? scenarios : [] };
+  const document = { getElementById: id => elements[`#${id}`] ?? null, body, head: new Element(), createElement: () => new Element(), querySelector: s => elements[s] ?? null, querySelectorAll: s => s === '.scenario-btn' ? scenarios : [] };
   const state = { user: { name: 'Learner' }, prefs, daily: {}, deck: [], errors: [], activity: { days: {}, streak: 0 } };
-  const storage = new Map([['kotoba.token', 'token']]);
+  const storage = new Map([['kotoba.token', 'token'], ...Object.entries(extra.storage || {})]);
   const location = { replace(url) { this.href = url; } };
   const fetch = async (url, opts) => {
     if (url.endsWith('/state')) return Response.json(state);
     if (url.endsWith('/state/prefs')) { state.prefs = JSON.parse(opts.body).value; return Response.json({ ok: true }); }
     return extra.fetch(url, opts);
   };
-  const context = { document, window: {}, location, localStorage: { getItem: k => storage.get(k) ?? null, setItem: (k, v) => storage.set(k, v), removeItem: k => storage.delete(k) }, fetch, setTimeout, clearTimeout, AbortController, console };
+  const context = { document, window: extra.window || {}, location, localStorage: { getItem: k => storage.get(k) ?? null, setItem: (k, v) => storage.set(k, v), removeItem: k => storage.delete(k) }, fetch, setTimeout, clearTimeout, AbortController, console };
   await vm.runInNewContext(readFileSync(new URL('../public/app.js', import.meta.url), 'utf8'), context);
-  return { elements, scenarios, location, state };
+  return { elements, scenarios, location, state, body, storage, context };
 }
 const event = { preventDefault() {} };
 
@@ -169,4 +169,79 @@ test('chat prevents duplicate requests, sends history, retries failures and disc
   assert.equal(payload.scenario, '学校');
   assert.equal(payload.history.length, 1);
   resolve(Response.json({ reply: 'そうですか。' })); await next;
+});
+
+
+test('N5/N4 language choice is per account and N3 remains Japanese', async () => {
+  for(const level of ['N5','N4']) {
+    const page=await frontend('conversation',{level,onboardingCompleted:true});
+    assert.equal(page.context.window.KOTOBA_UI_LANGUAGE,'vi');
+    assert.equal(page.body.dataset.interfaceMode,'vi-support');
+  }
+  const page=await frontend('conversation',{level:'N3',onboardingCompleted:true});
+  assert.equal(page.context.window.KOTOBA_UI_LANGUAGE,'ja');
+  assert.equal(page.body.dataset.interfaceMode,'ja-only');
+});
+
+test('final microphone transcript sends chat automatically and reads AI reply', async () => {
+  let recognition, spoken, request;
+  class Recognition {
+    constructor(){recognition=this}
+    start(){}
+    stop(){this.onend()}
+    abort(){this.onend()}
+  }
+  const speechSynthesis={cancel(){},speak(value){spoken=value}};
+  const page=await frontend('conversation',{level:'N5',onboardingCompleted:true},{window:{SpeechRecognition:Recognition,speechSynthesis},fetch:async(url,opts)=>{request=JSON.parse(opts.body);return Response.json({reply:'はい、どうぞ。'})}});
+  page.context.SpeechSynthesisUtterance=class {constructor(text){this.text=text}};
+  const form=page.elements['#chatForm'];let pending;
+  form.requestSubmit=()=>{pending=form.onsubmit(event)};
+  page.elements['#conversationMic'].listeners.click();
+  assert.equal(recognition.lang,'ja-JP');
+  recognition.onresult({results:[Object.assign([{transcript:'お茶ください。'}],{isFinal:true})]});
+  await pending;
+  assert.equal(request.text,'お茶ください。');
+  assert.equal(spoken.text,'はい、どうぞ。');
+  recognition.onend();
+  assert.equal(page.elements['#conversationMic'].textContent,'');
+  assert.equal(page.elements['#conversationMic'].classes.has('listening'),false);
+});
+
+test('microphone denial and synchronous start failures reset listening state', async () => {
+  let recognition;
+  class Recognition {constructor(){recognition=this} start(){} }
+  const page=await frontend('conversation',{level:'N5',onboardingCompleted:true},{window:{SpeechRecognition:Recognition}});
+  const mic=page.elements['#conversationMic'];mic.listeners.click();
+  recognition.onerror({error:'not-allowed'});
+  assert.equal(mic.classes.has('listening'),false);
+  assert.ok(page.body.children.some(el=>el.textContent.includes('cho phép')));
+  Recognition.prototype.start=()=>{throw new Error('device busy')};
+  mic.listeners.click();
+  assert.equal(mic.classes.has('listening'),false);
+  assert.ok(page.body.children.some(el=>el.textContent.includes('Không mở')));
+});
+
+
+test('N4 learner can retain Japanese mode after refresh', async () => {
+ const page=await frontend('conversation',{level:'N4',onboardingCompleted:true},{storage:{'kotoba.uiLanguage.guest':'ja'}});
+ assert.equal(page.context.window.KOTOBA_UI_LANGUAGE,'ja');
+ assert.equal(page.body.dataset.interfaceMode,'ja-only');
+});
+
+test('language UI translates basic labels, keeps learning content, and persists the selector', () => {
+ for(const language of ['vi','ja']) {
+  const nodes=[{textContent:'ホーム',parentElement:{closest:()=>null}},{textContent:'学校',parentElement:{closest:()=>true}}];
+  const actions=new Element();const sections=['vi','ja'].map(lang=>({dataset:{guideLanguage:lang}}));
+  const document={body:{querySelectorAll:()=>[]},documentElement:{},createElement:()=>new Element(),querySelector:()=>actions,querySelectorAll:()=>sections,createTreeWalker:()=>{let i=0;return {nextNode:()=>nodes[i++]||null}}};
+  const saved=new Map([['kotoba.prefs',JSON.stringify({level:'N4',onboardingCompleted:true})],['kotoba.user',JSON.stringify({id:42})]]);
+  let reloaded=false;
+  vm.runInNewContext(readFileSync(new URL('../public/ui-language.js',import.meta.url),'utf8'),{document,window:{KOTOBA_UI_LANGUAGE:language},NodeFilter:{SHOW_TEXT:4},MutationObserver:class{observe(){}},localStorage:{getItem:k=>saved.get(k),setItem:(k,v)=>saved.set(k,v)},location:{reload(){reloaded=true}}});
+  assert.equal(nodes[0].textContent,language==='vi'?'Trang chủ':'ホーム');
+  assert.equal(nodes[1].textContent,'学校');
+  assert.equal(actions.children[0].textContent,'使い方ガイド');
+  assert.equal(actions.children[0].href,'guide.html');
+  assert.equal(sections.find(x=>x.dataset.guideLanguage===language).hidden,false);
+  const select=actions.children[1];select.value='ja';select.onchange();
+  assert.equal(saved.get('kotoba.uiLanguage.42'),'ja');assert.equal(reloaded,true);
+ }
 });

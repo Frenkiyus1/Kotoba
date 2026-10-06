@@ -11,8 +11,8 @@
   let syncing=false;
   let serverPrefs=null;
   const interfaceMode=level=>['N5','N4'].includes(level)?'vi-support':'ja-only';
-  const supportsVietnamese=()=>interfaceMode(serverPrefs?.level)==='vi-support';
-  function applyLanguageMode(){document.body.dataset.interfaceMode=interfaceMode(serverPrefs?.level)}
+  const supportsVietnamese=()=>(!serverPrefs||interfaceMode(serverPrefs.level)==='vi-support')&&window.KOTOBA_UI_LANGUAGE!=='ja';
+  function applyLanguageMode(){document.body.dataset.interfaceMode=supportsVietnamese()?'vi-support':'ja-only'}
   const languageStyle=document.createElement('style');
   languageStyle.textContent='body[data-interface-mode="ja-only"] .vi,body[data-interface-mode="ja-only"] [lang="vi"],body[data-interface-mode="ja-only"] [data-lang="vi"]{display:none!important}';
   document.head.appendChild(languageStyle);
@@ -44,6 +44,9 @@
     if(!serverPrefs.onboardingCompleted&&document.body.dataset.page!=='onboarding'){location.replace('onboarding.html');return}
     if(serverPrefs.onboardingCompleted&&document.body.dataset.page==='onboarding'){location.replace('dashboard.html');return}
   }
+  const languageKey=`kotoba.uiLanguage.${load(STORE.user,{}).id||'guest'}`;
+  window.KOTOBA_UI_LANGUAGE=(!serverPrefs||['N5','N4'].includes(serverPrefs.level))?(localStorage.getItem(languageKey)||'vi'):'ja';
+  const uiScript=document.createElement('script');uiScript.src='ui-language.js';document.head.appendChild(uiScript);
   applyLanguageMode();
   ensureSeed();
 
@@ -82,7 +85,21 @@
   // speech synthesis / recognition
   $$('[data-speak]').forEach(b=>b.addEventListener('click',()=>{if(!('speechSynthesis' in window))return toast('このブラウザでは音声再生を利用できません。');speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(b.dataset.speak);u.lang='ja-JP';u.rate=.88;speechSynthesis.speak(u)}));
   $$('[data-mic-target]').forEach(b=>b.addEventListener('click',()=>startRecognition(b.dataset.micTarget,b)));
-  function startRecognition(targetId,button){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR){toast('音声入力に対応していないため、文字で入力してください。');return}const r=new SR();r.lang='ja-JP';r.interimResults=false;button.classList.add('listening');button.textContent='…';r.onresult=e=>{const text=e.results[0][0].transcript;const t=document.getElementById(targetId);if(t)t.value=text};r.onend=()=>{button.classList.remove('listening');button.textContent='●'};r.start()}
+  let activeRecognition=null;
+  function startRecognition(targetId,button,onFinal){
+    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    const message=(vi,ja)=>supportsVietnamese()?vi:ja;
+    if(!SR){toast(message('Trình duyệt không hỗ trợ nhận giọng nói. Hãy nhập bằng bàn phím.','音声入力に対応していません。文字で入力してください。'));return}
+    if(activeRecognition){activeRecognition.stop();return}
+    window.speechSynthesis?.cancel();
+    const original=button.textContent,r=new SR();let received=false;
+    r.lang='ja-JP';r.interimResults=false;r.continuous=false;
+    const reset=()=>{if(activeRecognition===r)activeRecognition=null;button.classList.remove('listening');button.textContent=original;button.setAttribute('aria-pressed','false')};
+    r.onresult=e=>{const text=Array.from(e.results).filter(x=>x.isFinal!==false).map(x=>x[0].transcript).join('');if(!text.trim())return;received=true;const t=document.getElementById(targetId);if(t)t.value=text;if(onFinal)onFinal(text)};
+    r.onerror=e=>{received=true;reset();toast(message(e.error==='not-allowed'?'Hãy cho phép trang sử dụng micro.':'Không nhận được giọng nói. Hãy thử lại hoặc nhập bằng bàn phím.',e.error==='not-allowed'?'マイクの使用を許可してください。':'音声を認識できません。文字入力も利用できます。'))};
+    r.onend=()=>{reset();if(!received)toast(message('Chưa nghe được câu nói. Hãy thử lại.','音声が聞き取れませんでした。もう一度お試しください。'))};
+    try{activeRecognition=r;button.classList.add('listening');button.textContent='…';button.setAttribute('aria-pressed','true');r.start()}catch(e){reset();toast(message('Không mở được micro. Hãy thử lại hoặc nhập bằng bàn phím.','マイクを開始できません。文字で入力してください。'))}
+  }
 
   // Focus mode
   function buildFocus(){if($('#focusOverlay'))return;const el=document.createElement('div');el.id='focusOverlay';el.className='focus-overlay';el.innerHTML=`<div class="focus-card"><span class="eyebrow">集中モード</span><h2>学習を始める前に、1分だけ集中しましょう。</h2><div id="breathCircle" class="breath-circle"><div><div id="breathLabel">吸う</div><div class="focus-time" id="focusTime">60</div></div></div><p id="focusHint">ゆっくり呼吸してください。</p><div style="display:flex;gap:10px;justify-content:center"><button class="btn btn-secondary" id="focusSkip">スキップ</button><button class="btn btn-primary hidden" id="focusDone">学習を始める</button></div></div>`;document.body.appendChild(el);$('#focusSkip').onclick=()=>stopFocus();$('#focusDone').onclick=()=>stopFocus()}
@@ -516,7 +533,7 @@ function initDictionary() {
 
       stopRecognition();
 
-      speechSynthesis.cancel();
+      window.speechSynthesis?.cancel();
 
       panel.classList.remove('show');
 
@@ -568,7 +585,7 @@ function initDictionary() {
 
 
     // Ngừng AI đang nói trước khi mở microphone.
-    speechSynthesis.cancel();
+    window.speechSynthesis?.cancel();
 
 
     recognition =
@@ -942,7 +959,7 @@ function initDictionary() {
     }
 
 
-    speechSynthesis.cancel();
+    window.speechSynthesis?.cancel();
 
 
     const speech =
@@ -984,11 +1001,11 @@ function initDictionary() {
   // conversation
   if(document.body.dataset.page==='conversation')initConversation();
   function initConversation(){
-    let scenario='コンビニ', history=[], busy=false, generation=0;
+    let scenario='コンビニ', history=[], busy=false, generation=0, voiceReply=false;
     const log=$('#chatLog'), input=$('#chatText'), submit=$('#chatForm button[type="submit"]');
     const prompts={コンビニ:'いらっしゃいませ。今日は何をお探しですか？',レストラン:'いらっしゃいませ。何名様ですか？',学校:'今日は学校で何を勉強しましたか？',友達:'今日はどうだった？何か面白いことがあった？',駅:'どこまで行きたいですか？',旅行:'日本ではどこへ行ってみたいですか？',自由会話:'こんにちは。今日は何について話したいですか？'};
     const add=(who,text)=>{const d=document.createElement('div');d.className=`bubble ${who}`;d.textContent=text;log.appendChild(d);log.scrollTop=log.scrollHeight;return d};
-    const reset=()=>{generation++;history=[{role:'assistant',content:prompts[scenario]}];log.replaceChildren();add('teacher',prompts[scenario]);input.value='';$('#chatError').classList.add('hidden')};
+    const reset=()=>{if(activeRecognition)activeRecognition.abort();window.speechSynthesis?.cancel();voiceReply=false;generation++;history=[{role:'assistant',content:prompts[scenario]}];log.replaceChildren();add('teacher',prompts[scenario]);input.value='';$('#chatError').classList.add('hidden')};
     reset();
     $$('.scenario-btn').forEach(b=>b.addEventListener('click',()=>{$$('.scenario-btn').forEach(x=>x.classList.remove('active'));b.classList.add('active');scenario=b.dataset.scenario;reset()}));
     $('#chatForm').onsubmit=async e=>{
@@ -1002,6 +1019,8 @@ function initDictionary() {
         const reply=await aiReply(scenario,text,history.slice(-20));
         if(current!==generation)return;
         pending.textContent=reply;
+        if(voiceReply&&window.speechSynthesis){try{const speech=new SpeechSynthesisUtterance(reply);speech.lang='ja-JP';speech.rate=.9;window.speechSynthesis.speak(speech)}catch(error){toast(supportsVietnamese()?'Không phát được âm thanh. Bạn có thể đọc phản hồi trên màn hình.':'音声を再生できません。画面の返答を確認してください。')}}
+        voiceReply=false;
         history.push({role:'user',content:text},{role:'assistant',content:reply});
         history=history.slice(-20);
       }catch(error){
@@ -1009,10 +1028,10 @@ function initDictionary() {
         pending.remove();student.remove();if(!input.value)input.value=text;
         $('#chatError').textContent=error.message||'返答を取得できませんでした。もう一度お試しください。';
         $('#chatError').classList.remove('hidden');
-      }finally{busy=false;submit.disabled=false;log.scrollTop=log.scrollHeight}
+      }finally{voiceReply=false;busy=false;submit.disabled=false;log.scrollTop=log.scrollHeight}
     };
     $('#chatForm').addEventListener('submit',()=>$('#chatError').classList.add('hidden'));
-    $('#conversationMic')?.addEventListener('click',()=>startRecognition('chatText',$('#conversationMic')));
+    $('#conversationMic')?.addEventListener('click',()=>{if(busy)return;const current=generation;startRecognition('chatText',$('#conversationMic'),()=>{if(current!==generation||busy)return;voiceReply=true;$('#chatForm').requestSubmit()})});
   }
   async function aiReply(scenario,text,history){
     const controller=new AbortController();

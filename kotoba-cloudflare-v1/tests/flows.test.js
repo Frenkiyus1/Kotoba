@@ -232,7 +232,7 @@ test('language UI translates basic labels, keeps learning content, and persists 
  for(const language of ['vi','ja']) {
   const nodes=[{textContent:'ホーム',parentElement:{closest:()=>null}},{textContent:'学校',parentElement:{closest:()=>true}}];
   const actions=new Element();const sections=['vi','ja'].map(lang=>({dataset:{guideLanguage:lang}}));
-  const document={body:{querySelectorAll:()=>[]},documentElement:{},createElement:()=>new Element(),querySelector:()=>actions,querySelectorAll:()=>sections,createTreeWalker:()=>{let i=0;return {nextNode:()=>nodes[i++]||null}}};
+  const document={body:{querySelectorAll:()=>[]},documentElement:{},createElement:()=>new Element(),querySelector:()=>actions,querySelectorAll:selector=>selector==='[data-guide-language]'?sections:[],createTreeWalker:()=>{let i=0;return {nextNode:()=>nodes[i++]||null}}};
   const saved=new Map([['kotoba.prefs',JSON.stringify({level:'N4',onboardingCompleted:true})],['kotoba.user',JSON.stringify({id:42})]]);
   let reloaded=false;
   vm.runInNewContext(readFileSync(new URL('../public/ui-language.js',import.meta.url),'utf8'),{document,window:{KOTOBA_UI_LANGUAGE:language},NodeFilter:{SHOW_TEXT:4},MutationObserver:class{observe(){}},localStorage:{getItem:k=>saved.get(k),setItem:(k,v)=>saved.set(k,v)},location:{reload(){reloaded=true}}});
@@ -244,4 +244,14 @@ test('language UI translates basic labels, keeps learning content, and persists 
   const select=actions.children[1];select.value='ja';select.onchange();
   assert.equal(saved.get('kotoba.uiLanguage.42'),'ja');assert.equal(reloaded,true);
  }
+});
+
+
+test('Vietnamese mode translates instructions, dynamic counters, headings and page title', () => {
+ const cases=[['今日やることだけに集中しましょう。','Hãy tập trung vào việc học hôm nay.'],['おはよう、Lanさん。','Chào bạn, Lan.'],['0 / 25分','0 / 25 phút'],['N5 文法','Ngữ pháp N5'],['語彙 18','Từ vựng 18'],['第05課','Bài 05'],['守 Shu','守 — Xem mẫu'],['保存しました。','Đã lưu.']];
+ const nodes=cases.map(([textContent])=>({textContent,parentElement:{closest:()=>null,setAttribute(){}}}));
+ const document={body:{querySelectorAll:()=>[]},title:'今日の復習 — KOTOBA',documentElement:{},querySelector:()=>null,querySelectorAll:()=>[],createTreeWalker:()=>{let i=0;return {nextNode:()=>nodes[i++]||null}}};
+ vm.runInNewContext(readFileSync(new URL('../public/ui-language.js',import.meta.url),'utf8'),{document,window:{KOTOBA_UI_LANGUAGE:'vi'},NodeFilter:{SHOW_TEXT:4},MutationObserver:class{observe(){}}});
+ cases.forEach(([,expected],i)=>assert.equal(nodes[i].textContent,expected));
+ assert.equal(document.title,'Ôn tập hôm nay — KOTOBA');
 });

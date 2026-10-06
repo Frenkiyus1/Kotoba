@@ -303,3 +303,15 @@
 
 /* Language controls and user guide */
 #uiLanguage{padding:8px;border:1px solid var(--border);border-radius:8px;background:var(--surface,#fff);color:var(--text,#222);max-width:130px}.nav-actions{flex-wrap:wrap}.guide-index{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:24px}.guide-section{padding:24px;margin-bottom:20px;scroll-margin-top:100px}.guide-section p{line-height:1.9}[data-guide-language][hidden]{display:none!important}@media(max-width:640px){.nav-actions .btn{padding:8px;font-size:12px}#uiLanguage{max-width:110px}.guide-section{padding:18px}}
+
+/* Use complete Vietnamese glyphs without falling back to Japanese UI fonts. */
+html[lang="vi"] body{font-family:"Segoe UI",Arial,"Helvetica Neue",system-ui,sans-serif}
+html[lang="vi"] .serif,html[lang="vi"] [data-ui-translated],html[lang="vi"] [lang="vi"]{font-family:"Segoe UI",Arial,"Helvetica Neue",system-ui,sans-serif;letter-spacing:normal}
+html[lang="vi"] .eyebrow{letter-spacing:.025em}
+html[lang="vi"] .navbar{height:auto;min-height:72px}
+html[lang="vi"] .nav-inner{flex-wrap:wrap;gap:12px;padding:12px 0}
+html[lang="vi"] .nav-links{flex-wrap:wrap;gap:16px}
+html[lang="vi"] .nav-links a{padding:8px 0}
+html[lang="vi"] .nav-links a.active:after{bottom:2px}
+
+html[lang="vi"] [data-lang="ja"]{display:none!important}

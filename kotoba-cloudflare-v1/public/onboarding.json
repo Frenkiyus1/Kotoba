@@ -1,0 +1,114 @@
+(() => {
+  'use strict';
+
+  const API = window.KOTOBA_API_BASE || '/api';
+  const TOKEN_KEY = 'kotoba.token';
+  const PREFS_KEY = 'kotoba.prefs';
+  const VALID_LEVELS = new Set(['N5', 'N4', 'N3', 'N2', 'N1']);
+
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (!token) {
+    location.replace('start.html');
+    return;
+  }
+
+  const cards = Array.from(document.querySelectorAll('[data-level]'));
+  const form = document.getElementById('levelOnboardingForm');
+  const button = document.getElementById('onboardingContinue');
+  const errorBox = document.getElementById('onboardingError');
+  let selectedLevel = 'N5';
+  let currentPrefs = {
+    level: 'N5',
+    goal: 'JLPT',
+    minutes: '20',
+    period: '夜',
+    studyTime: '20:30',
+    bioInterest: true,
+    onboardingCompleted: false,
+  };
+
+  async function api(path, options = {}) {
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(options.headers || {}),
+      Authorization: `Bearer ${token}`,
+    };
+
+    const response = await fetch(`${API}${path}`, { ...options, headers });
+    let data = null;
+    try { data = await response.json(); } catch (_) {}
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        localStorage.removeItem(TOKEN_KEY);
+        location.replace('start.html');
+        throw new Error('ログインしてください。');
+      }
+      throw new Error(data?.detail || `HTTP ${response.status}`);
+    }
+
+    return data;
+  }
+
+  function showError(message) {
+    errorBox.textContent = message;
+    errorBox.classList.remove('hidden');
+  }
+
+  function choose(level) {
+    if (!VALID_LEVELS.has(level)) return;
+    selectedLevel = level;
+    cards.forEach((card) => card.classList.toggle('selected', card.dataset.level === level));
+  }
+
+  cards.forEach((card) => {
+    card.addEventListener('click', () => choose(card.dataset.level));
+  });
+
+  async function loadState() {
+    try {
+      const state = await api('/state');
+      currentPrefs = { ...currentPrefs, ...(state?.prefs || {}) };
+
+      if (currentPrefs.onboardingCompleted) {
+        location.replace('dashboard.html');
+        return;
+      }
+
+      if (VALID_LEVELS.has(currentPrefs.level)) {
+        choose(currentPrefs.level);
+      }
+    } catch (error) {
+      showError(error.message || '学習設定を読み込めませんでした。再読み込みしてください。');
+    }
+  }
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    errorBox.classList.add('hidden');
+    button.disabled = true;
+    button.textContent = '保存しています…';
+
+    const nextPrefs = {
+      ...currentPrefs,
+      level: selectedLevel,
+      onboardingCompleted: true,
+    };
+
+    try {
+      await api('/state/prefs', {
+        method: 'PUT',
+        body: JSON.stringify({ value: nextPrefs }),
+      });
+
+      localStorage.setItem(PREFS_KEY, JSON.stringify(nextPrefs));
+      location.replace('dashboard.html');
+    } catch (error) {
+      showError(error.message || '保存できませんでした。もう一度試してください。');
+      button.disabled = false;
+      button.textContent = 'このレベルで始める';
+    }
+  });
+
+  loadState();
+})();

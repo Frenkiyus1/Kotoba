@@ -1,1 +1,64 @@
-<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>日本語レベル - KOTOBA</title><link rel="stylesheet" href="styles.css"></head><body class="onboarding-page" data-page="onboarding"><div class="onboarding-shell"><a class="brand" href="index.html"><span class="brand-mark">こ</span>KOTOBA</a><form id="onboardingForm" class="card onboard-card"><h1>あなたの日本語レベルを教えてください。</h1><p class="muted">学習内容とサポートをあなたに合わせて調整します。</p><div class="choice-grid" role="group" aria-label="JLPTレベル"><button type="button" class="choice" data-value="N5" aria-pressed="false"><b>N5 — はじめて</b><div class="muted">ベトナム語サポート付き</div></button><button type="button" class="choice" data-value="N4" aria-pressed="false"><b>N4 — 基礎</b><div class="muted">ベトナム語サポート付き</div></button><button type="button" class="choice" data-value="N3" aria-pressed="false"><b>N3 — 中級</b><div class="muted">日本語のみ</div></button><button type="button" class="choice" data-value="N2" aria-pressed="false"><b>N2 — 上級</b><div class="muted">日本語のみ</div></button><button type="button" class="choice" data-value="N1" aria-pressed="false"><b>N1 — 高度</b><div class="muted">日本語のみ</div></button></div><p id="onboardingError" role="alert" class="hidden"></p><div style="display:flex;justify-content:flex-end;margin-top:26px"><button id="nextStep" type="submit" class="btn btn-primary" disabled>続ける</button></div></form></div><script src="dictionary-data.js"></script><script src="app.js"></script></body></html>
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>日本語レベル — KOTOBA</title>
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    .level-onboarding{max-width:900px;margin:0 auto;padding:56px 24px}.level-onboarding .intro{text-align:center;margin-bottom:28px}.level-onboarding h1{margin:10px 0;font-size:clamp(30px,5vw,48px)}.level-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:28px 0}.level-card{appearance:none;border:1px solid var(--border,#ddd6cb);border-radius:18px;background:#fffdfa;padding:24px 12px;text-align:center;cursor:pointer;transition:.18s ease;color:inherit}.level-card:hover{transform:translateY(-2px)}.level-card.selected{border:2px solid var(--vermilion,#df4a3d);background:#fff6f2;box-shadow:0 10px 30px rgba(0,0,0,.06)}.level-card b{display:block;font-size:30px;margin-bottom:7px}.level-card small{display:block;line-height:1.55;color:var(--muted,#817c74)}.support-vi{color:#b84437!important}.support-ja{color:#52606d!important}.onboard-error{margin-top:14px;color:#b42318;text-align:center}.onboard-note{text-align:center;color:var(--muted,#817c74);margin-top:18px}.level-submit{display:flex;justify-content:center;margin-top:28px}.level-submit .btn{min-width:260px}@media(max-width:760px){.level-grid{grid-template-columns:1fr 1fr}.level-card:last-child{grid-column:1/-1}.level-onboarding{padding:32px 16px}}
+  </style>
+</head>
+<body class="onboarding-page">
+  <main class="level-onboarding">
+    <a class="brand" href="index.html"><span class="brand-mark">こ</span>KOTOBA</a>
+
+    <section class="card onboard-card" style="margin-top:28px">
+      <div class="intro">
+        <span class="eyebrow">はじめに</span>
+        <h1>あなたの日本語レベルを教えてください。</h1>
+        <p class="muted">学習内容とサポートをあなたに合わせて調整します。</p>
+      </div>
+
+      <form id="levelOnboardingForm">
+        <div class="level-grid" id="levelGrid">
+          <button type="button" class="level-card selected" data-level="N5">
+            <b>N5</b>
+            <small>はじめて・入門</small>
+            <small class="support-vi">ベトナム語サポート付き</small>
+          </button>
+          <button type="button" class="level-card" data-level="N4">
+            <b>N4</b>
+            <small>基礎</small>
+            <small class="support-vi">ベトナム語サポート付き</small>
+          </button>
+          <button type="button" class="level-card" data-level="N3">
+            <b>N3</b>
+            <small>中級</small>
+            <small class="support-ja">日本語のみ</small>
+          </button>
+          <button type="button" class="level-card" data-level="N2">
+            <b>N2</b>
+            <small>上級</small>
+            <small class="support-ja">日本語のみ</small>
+          </button>
+          <button type="button" class="level-card" data-level="N1">
+            <b>N1</b>
+            <small>高度</small>
+            <small class="support-ja">日本語のみ</small>
+          </button>
+        </div>
+
+        <div class="level-submit">
+          <button id="onboardingContinue" class="btn btn-primary" type="submit">このレベルで始める</button>
+        </div>
+
+        <p class="onboard-note">レベルはあとでプロフィールから変更できます。</p>
+        <p id="onboardingError" class="onboard-error hidden" role="alert"></p>
+      </form>
+    </section>
+  </main>
+
+  <script src="onboarding.js"></script>
+</body>
+</html>

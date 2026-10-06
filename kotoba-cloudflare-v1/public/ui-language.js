@@ -317,7 +317,12 @@ const labels={
   "AIから返答を取得できませんでした。もう一度お試しください。": "Không nhận được phản hồi từ AI. Hãy thử lại.",
   "2000文字以内で入力してください。": "Hãy nhập tối đa 2000 ký tự.",
   "日本語レベル — KOTOBA": "Trình độ tiếng Nhật — KOTOBA",
-  "KOTOBA — 日本語を、もっと自然に。": "KOTOBA — Học tiếng Nhật tự nhiên hơn."
+  "KOTOBA — 日本語を、もっと自然に。": "KOTOBA — Học tiếng Nhật tự nhiên hơn.",
+  "AIの本日の利用上限に達しました。時間をおいて再度お試しください。": "AI đã hết hạn mức sử dụng hôm nay. Hãy thử lại sau.",
+  "AIが混み合っています。少し待ってから再度お試しください。": "AI đang quá tải. Hãy chờ một chút rồi gửi lại.",
+  "AIモデルの設定が正しくありません。管理者に連絡してください。": "Model AI chưa được cấu hình đúng. Hãy liên hệ quản trị viên.",
+  "CloudflareのAI利用権限を確認する必要があります。管理者に連絡してください。": "Cần kiểm tra quyền sử dụng AI trên Cloudflare. Hãy liên hệ quản trị viên.",
+  "AIの返答が長すぎました。もう一度お試しください。": "Phản hồi AI quá dài. Hãy thử gửi lại."
 };
 function translatedText(text){
  if(labels[text])return labels[text];

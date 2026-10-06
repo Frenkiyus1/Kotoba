@@ -95,7 +95,7 @@
     const original=button.textContent,r=new SR();let received=false;
     r.lang='ja-JP';r.interimResults=false;r.continuous=false;
     const reset=()=>{if(activeRecognition===r)activeRecognition=null;button.classList.remove('listening');button.textContent=original;button.setAttribute('aria-pressed','false')};
-    r.onresult=e=>{const text=Array.from(e.results).filter(x=>x.isFinal!==false).map(x=>x[0].transcript).join('');if(!text.trim())return;received=true;const t=document.getElementById(targetId);if(t)t.value=text;if(onFinal)onFinal(text)};
+    r.onresult=e=>{const text=Array.from(e.results).filter(x=>x.isFinal!==false).map(x=>x[0].transcript).join('');if(!text.trim()||received)return;received=true;const t=document.getElementById(targetId);if(t)t.value=text;if(onFinal)onFinal(text)};
     r.onerror=e=>{received=true;reset();toast(message(e.error==='not-allowed'?'Hãy cho phép trang sử dụng micro.':'Không nhận được giọng nói. Hãy thử lại hoặc nhập bằng bàn phím.',e.error==='not-allowed'?'マイクの使用を許可してください。':'音声を認識できません。文字入力も利用できます。'))};
     r.onend=()=>{reset();if(!received)toast(message('Chưa nghe được câu nói. Hãy thử lại.','音声が聞き取れませんでした。もう一度お試しください。'))};
     try{activeRecognition=r;button.classList.add('listening');button.textContent='…';button.setAttribute('aria-pressed','true');r.start()}catch(e){reset();toast(message('Không mở được micro. Hãy thử lại hoặc nhập bằng bàn phím.','マイクを開始できません。文字で入力してください。'))}
@@ -1014,7 +1014,7 @@ function initDictionary() {
       if(!hasJapanese(text)){add('teacher','日本語で話してみましょう。短い文でも大丈夫です。');return}
       if(text.length>2000){toast('2000文字以内で入力してください。');return}
       const current=generation, student=add('student',text);input.value='';
-      const pending=add('teacher','考えています…');busy=true;submit.disabled=true;
+      const pending=add('teacher',supportsVietnamese()?'AI đang trả lời…':'考えています…');busy=true;submit.disabled=true;
       try{
         const reply=await aiReply(scenario,text,history.slice(-20));
         if(current!==generation)return;

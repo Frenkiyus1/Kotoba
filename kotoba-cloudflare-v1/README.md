@@ -212,7 +212,7 @@ POST /api/ai/conversation
 # AI CỦA BẢN NÀY LÀ GÌ?
 
 Hội thoại gọi **Cloudflare Workers AI** qua binding `AI` trong `wrangler.jsonc`.
-Model mặc định: `@cf/meta/llama-3.1-8b-instruct`; có thể đặt biến `AI_MODEL` để đổi model.
+Model mặc định: `@cf/meta/llama-3.1-8b-instruct-fp8`; có thể đặt biến `AI_MODEL` để đổi model.
 Backend lấy trình độ từ D1 và nhận tối đa 20 tin nhắn lịch sử. Khi AI lỗi, giao diện hiển thị lỗi và giữ câu hỏi để gửi lại.
 
 Binding `DB` đã được cấu hình trong `d1_databases` của `wrangler.jsonc` để kết nối database `kotoba-db` hiện có. Đăng ký, đăng nhập và hội thoại đều dùng database này; không cần tạo database mới.

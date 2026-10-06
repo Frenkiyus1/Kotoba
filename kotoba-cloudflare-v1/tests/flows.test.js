@@ -55,7 +55,7 @@ test('conversation passes history and stored level to AI for every scenario', as
     env.db.exec("UPDATE preferences SET level = 'N2', onboarding_completed = 1");
     for (const scenario of ['コンビニ', 'レストラン', '学校', '友達', '駅', '旅行', '自由会話']) {
       let inputs;
-      env.AI = { async run(model, value) { inputs = value; assert.equal(model, '@cf/meta/llama-3.1-8b-instruct'); return { response: 'こんにちは。' }; } };
+      env.AI = { async run(model, value) { inputs = value; assert.equal(model, '@cf/meta/llama-3.1-8b-instruct-fp8'); return { response: 'こんにちは。' }; } };
       const history = [{ role: 'assistant', content: '何を買いますか？' }, { role: 'user', content: 'お茶です。' }];
       const result = await call(env, '/ai/conversation', { scenario, text: '二つください。', history, level: 'N5' }, token);
       assert.equal(result.status, 200);
@@ -254,4 +254,39 @@ test('Vietnamese mode translates instructions, dynamic counters, headings and pa
  vm.runInNewContext(readFileSync(new URL('../public/ui-language.js',import.meta.url),'utf8'),{document,window:{KOTOBA_UI_LANGUAGE:'vi'},NodeFilter:{SHOW_TEXT:4},MutationObserver:class{observe(){}}});
  cases.forEach(([,expected],i)=>assert.equal(nodes[i].textContent,expected));
  assert.equal(document.title,'Ôn tập hôm nay — KOTOBA');
+});
+
+
+test('conversation uses the current model, migrates the old model override and respects custom models', async () => {
+ const env=environment();try {
+  const {token}=await account(env);
+  for(const [configured,expected] of [[undefined,'@cf/meta/llama-3.1-8b-instruct-fp8'],['@cf/meta/llama-3.1-8b-instruct','@cf/meta/llama-3.1-8b-instruct-fp8'],['custom-model','custom-model']]){
+   env.AI_MODEL=configured;env.AI={async run(model,input){assert.equal(model,expected);assert.equal(input.stream,false);return {response:'こんにちは。'}}};
+   assert.equal((await call(env,'/ai/conversation',{text:'こんにちは。'},token)).status,200);
+  }
+ }finally{env.db.close()}
+});
+
+test('long AI replies remain usable on the next turn and total history stays bounded', async () => {
+ const env=environment();try {
+  const {token}=await account(env);let messages;
+  env.AI={async run(model,input){messages=input.messages;return {response:'あ'.repeat(2500)}}};
+  const first=await (await call(env,'/ai/conversation',{text:'こんにちは。'},token)).json();
+  assert.equal(first.reply.length,2500);
+  const history=Array.from({length:20},(_,i)=>({role:i%2?'assistant':'user',content:i%2?first.reply:'はい。'}));
+  assert.equal((await call(env,'/ai/conversation',{text:'ありがとう。',history},token)).status,200);
+  assert.ok(messages.slice(1,-1).reduce((n,m)=>n+m.content.length,0)<=6000);
+  assert.equal(messages.at(-1).content,'ありがとう。');
+ }finally{env.db.close()}
+});
+
+test('AI quota, model, timeout and capacity failures have distinct actionable errors', async () => {
+ const env=environment();try {
+  const {token}=await account(env);
+  for(const [code,status,detail] of [[3036,429,'利用上限'],[3040,503,'混み合'],[5007,503,'モデル'],[3042,503,'モデル'],[5035,503,'利用権限'],[3007,504,'時間']]){
+   env.AI={async run(){throw Object.assign(new Error(`${code}: provider error`),{code})}};
+   const response=await call(env,'/ai/conversation',{text:'こんにちは。'},token);
+   assert.equal(response.status,status);assert.ok((await response.json()).detail.includes(detail));
+  }
+ }finally{env.db.close()}
 });

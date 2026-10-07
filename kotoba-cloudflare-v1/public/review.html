@@ -14,6 +14,7 @@
       <section>
         <div class="review-heading"><span class="muted">今日のカード</span><b id="reviewPosition">0 / 0</b></div>
         <article class="card flashcard" id="flashcard"></article>
+        <div class="flash-toggle"><button class="btn btn-secondary hidden" id="revealCard" type="button" aria-controls="flashcard" aria-pressed="false">答えを見る</button></div>
         <div class="flash-actions" id="reviewActions">
           <button class="btn btn-danger-soft" id="rateAgain">もう一度</button>
           <button class="btn btn-secondary" id="rateHard">難しい</button>
@@ -24,13 +25,13 @@
       <aside class="review-sidebar">
         <section class="card word-editor" aria-labelledby="addWordTitle">
           <span class="eyebrow">自分の単語</span>
-          <h2 id="addWordTitle">単語を追加</h2>
-          <p class="muted">日本語と意味を入力すると、今日から復習できます。</p>
+          <h2 id="addWordTitle">自分のカードを作成</h2>
+          <p class="muted">日本語とベトナム語の意味を入力して、自分のカードを作りましょう。</p>
           <form id="addWordForm">
             <fieldset id="addWordFields">
               <div class="field"><label for="wordTerm">日本語の単語（必須）</label><input id="wordTerm" name="term" lang="ja" required maxlength="100" placeholder="例：図書館" autocomplete="off"></div>
               <div class="field"><label for="wordReading">読み方（任意）</label><input id="wordReading" name="reading" lang="ja" maxlength="100" placeholder="例：としょかん" autocomplete="off"></div>
-              <div class="field"><label for="wordMeaning">意味（必須）</label><input id="wordMeaning" name="meaning" required maxlength="500" placeholder="単語の意味を入力してください" autocomplete="off"></div>
+              <div class="field"><label for="wordMeaning">ベトナム語の意味（必須）</label><input id="wordMeaning" name="meaning" lang="vi" data-flashcard-vietnamese required maxlength="500" placeholder="ベトナム語の意味を入力してください" autocomplete="off"></div>
               <div class="field"><label for="wordExample">例文（任意）</label><textarea id="wordExample" name="example" lang="ja" rows="3" maxlength="1000" placeholder="例：図書館で本を読みます。"></textarea></div>
               <button class="btn btn-primary" id="addWordSubmit" type="submit">カードに追加</button>
             </fieldset>

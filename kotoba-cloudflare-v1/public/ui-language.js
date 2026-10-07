@@ -2,6 +2,15 @@
 'use strict';
 const language=window.KOTOBA_UI_LANGUAGE||'ja';
 const labels={
+  "ベトナム語の意味（必須）": "Nghĩa tiếng Việt (bắt buộc)",
+  "ベトナム語の意味を入力してください": "Nhập nghĩa tiếng Việt",
+  "日本語とベトナム語の意味を入力して、自分のカードを作りましょう。": "Tự tạo flashcard bằng từ tiếng Nhật và nghĩa tiếng Việt.",
+  "自分のカードを作成": "Tự tạo flashcard",
+  "ベトナム語の意味": "Nghĩa tiếng Việt",
+  "カードを押すと裏返せます。": "Bấm vào thẻ để lật xem nghĩa.",
+  "表に戻す": "Lật về mặt trước",
+  "ベトナム語の意味を入力してください。": "Hãy nhập nghĩa tiếng Việt.",
+
   "自分の単語": "Từ vựng của bạn",
   "単語を追加": "Thêm từ mới",
   "日本語と意味を入力すると、今日から復習できます。": "Nhập từ tiếng Nhật và nghĩa để bắt đầu ôn ngay.",

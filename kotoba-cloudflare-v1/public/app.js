@@ -14,9 +14,8 @@
   const supportsVietnamese=()=>(!serverPrefs||interfaceMode(serverPrefs.level)==='vi-support')&&window.KOTOBA_UI_LANGUAGE!=='ja';
   function applyLanguageMode(){document.body.dataset.interfaceMode=supportsVietnamese()?'vi-support':'ja-only'}
   const languageStyle=document.createElement('style');
-  languageStyle.textContent='body[data-interface-mode="ja-only"] .vi,body[data-interface-mode="ja-only"] [lang="vi"],body[data-interface-mode="ja-only"] [data-lang="vi"]{display:none!important}';
+  languageStyle.textContent='body[data-interface-mode="ja-only"] .vi,body[data-interface-mode="ja-only"] [lang="vi"]:not([data-flashcard-vietnamese]),body[data-interface-mode="ja-only"] [data-lang="vi"]{display:none!important}';
   document.head.appendChild(languageStyle);
-  function learningMeaning(card){if(supportsVietnamese()||card.source==='手入力')return card.meaning||'';const entry=window.KOTOBA_DICTIONARY?.[card.term];return entry?.meaningJa||entry?.usage||card.example||'この語の使い方を例文で確認してください。'}
   const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   async function persistPrefs(value){await api('/state/prefs',{method:'PUT',body:JSON.stringify({value})});applyServerState(await api('/state'));applyLanguageMode()}
 
@@ -1011,38 +1010,64 @@ function initDictionary() {
       ratingButtons.forEach(button=>button.disabled=value);
       submit.textContent=value?'保存中…':'カードに追加';
     };
+    const reveal=$('#revealCard');
+    const setFlipped=flipped=>{
+      card.classList.toggle('flipped',flipped);
+      card.setAttribute('aria-pressed',String(flipped));
+      card.setAttribute('aria-labelledby',flipped?'flashBack':'flashFront');
+      reveal.setAttribute('aria-pressed',String(flipped));
+      reveal.textContent=flipped?'表に戻す':'答えを見る';
+      $('#flashFront')?.setAttribute('aria-hidden',String(flipped));
+      $('#flashBack')?.setAttribute('aria-hidden',String(!flipped));
+      card.setAttribute('aria-label',supportsVietnamese()
+        ?(flipped?'Lật thẻ về mặt trước':'Lật thẻ để xem nghĩa tiếng Việt')
+        :(flipped?'カードを表に戻す':'カードを裏返してベトナム語の意味を見る'));
+    };
+    const flip=()=>{if(card.dataset.term)setFlipped(!card.classList.contains('flipped'))};
+    card.addEventListener('click',flip);
+    card.addEventListener('keydown',e=>{
+      if(e.target===card&&(e.key==='Enter'||e.key===' ')){
+        e.preventDefault();
+        if(!e.repeat)flip();
+      }
+    });
+    reveal.onclick=flip;
     const render=()=>{
       renderDeckList(deck);
-      card.classList.remove('flipped');
       const c=due[idx];
       $('#reviewActions').classList.toggle('hidden',!c);
+      reveal.classList.toggle('hidden',!c);
       $('#reviewPosition').textContent=`${c?idx+1:due.length} / ${due.length}`;
       if(!c){
         delete card.dataset.term;
+        setFlipped(false);
+        card.removeAttribute('role');
+        card.removeAttribute('tabindex');
+        card.removeAttribute('aria-label');
+        card.removeAttribute('aria-labelledby');
+        card.removeAttribute('aria-pressed');
         card.innerHTML=deck.length
           ?'<h2>今日の復習は完了しました。</h2><p class="muted">よくできました。</p>'
           :'<h2>まだカードがありません。</h2><p class="muted">単語を追加して、復習を始めましょう。</p>';
         return;
       }
       card.dataset.term=c.term;
-      const term=escapeHtml(c.term),reading=escapeHtml(c.reading),meaning=escapeHtml(learningMeaning(c));
+      card.setAttribute('role','button');
+      card.setAttribute('tabindex','0');
+      const term=escapeHtml(c.term),reading=escapeHtml(c.reading);
+      const meaning=escapeHtml(c.meaning||window.KOTOBA_DICTIONARY?.[c.term]?.meaningVi||'');
       const example=escapeHtml(c.example);
-      let front='',back='';
-      if((c.stage||0)===0){
-        front=`<div class="flash-prompt">意味を思い出してください</div><div class="flash-front-main jp">${term}</div>`;
-        back=`<h2 class="jp">${term}</h2><div data-learning-content>${reading}</div><h3 data-learning-content>${meaning}</h3>`;
-      }else if(c.stage===1||!c.example){
-        front=`<div class="flash-prompt">日本語で言ってください</div><div class="flash-front-main" style="font-size:32px">${meaning}</div>`;
-        back=`<h2 class="jp">${term}</h2><div data-learning-content>${reading}</div>`;
-      }else if(c.stage===2){
+      let front='';
+      if(c.stage===2&&c.example?.includes(c.term)){
         front=`<div class="flash-prompt">文脈から思い出してください</div><div class="context-example jp">${escapeHtml(c.example.replace(c.term,'＿＿＿'))}</div>`;
-        back=`<h2 class="jp">${term}</h2><div class="context-example jp">${example}</div>`;
-      }else{
+      }else if(c.stage===3&&c.example){
         front=`<div class="flash-prompt">この語を使って、自分の文を一つ考えてください</div><div class="flash-front-main jp">${term}</div>`;
-        back=`<h2 class="jp">${term}</h2><div class="context-example jp">例：${example}</div><p class="muted">次は会話の中で使ってみましょう。</p>`;
+      }else{
+        front=`<div class="flash-prompt">意味を思い出してください</div><div class="flash-front-main jp">${term}</div>`;
       }
-      card.innerHTML=`<span class="source-badge">${escapeHtml(c.source||'学習')}</span><div class="flash-front">${front}<button class="btn btn-secondary" id="revealCard">答えを見る</button></div><div class="flash-back">${back}</div>`;
-      $('#revealCard').onclick=()=>card.classList.add('flipped');
+      const back=`<h2 class="jp">${term}</h2><div data-learning-content>${reading}</div><p class="flash-meaning-label">ベトナム語の意味</p><h3 class="flash-meaning" lang="vi" data-flashcard-vietnamese data-learning-content>${meaning}</h3>${example?`<div class="context-example jp">${example}</div>`:''}`;
+      card.innerHTML=`<span class="source-badge">${escapeHtml(c.source||'学習')}</span><div class="flash-front" id="flashFront" aria-hidden="false">${front}<p class="muted flash-hint">カードを押すと裏返せます。</p></div><div class="flash-back" id="flashBack" aria-hidden="true">${back}</div>`;
+      setFlipped(false);
     };
     const rate=async rating=>{
       if(busy)return;
@@ -1072,7 +1097,7 @@ function initDictionary() {
       const meaning=$('#wordMeaning').value.trim(),example=$('#wordExample').value.trim();
       const fail=(message,input)=>{error.textContent=message;error.classList.remove('hidden');input?.focus()};
       if(!term||!hasJapanese(term))return fail('日本語の単語を入力してください。',$('#wordTerm'));
-      if(!meaning)return fail('意味を入力してください。',$('#wordMeaning'));
+      if(!meaning)return fail('ベトナム語の意味を入力してください。',$('#wordMeaning'));
       if(term.length>100||reading.length>100||meaning.length>500||example.length>1000)return fail('入力が長すぎます。短くしてください。');
       if(deck.some(c=>c.term===term))return fail('この単語はすでにカードにあります。',$('#wordTerm'));
       const newCard={term,reading,meaning,example,source:'手入力',stage:0,interval:0,due:todayKey(),reviews:0,exposures:1,lastSeen:todayKey()};

@@ -88,12 +88,14 @@ test('conversation exposes missing AI, invalid data, empty AI response and authe
 });
 
 class Element {
-  constructor() { this.dataset = {}; this.children = []; this.listeners = {}; this.value = ''; this.textContent = ''; this.disabled = false; this.classes = new Set(); this.classList = { add: c => this.classes.add(c), remove: c => this.classes.delete(c), toggle: (c, yes) => yes ? this.classes.add(c) : this.classes.delete(c) }; }
+  constructor() { this.dataset = {}; this.children = []; this.listeners = {}; this.value = ''; this.textContent = ''; this.disabled = false; this.classes = new Set(); this.classList = { add: c => this.classes.add(c), remove: c => this.classes.delete(c), contains: c => this.classes.has(c), toggle: (c, yes) => yes ? this.classes.add(c) : this.classes.delete(c) }; }
   addEventListener(name, fn) { this.listeners[name] = fn; }
   appendChild(el) { el.parent = this; this.children.push(el); }
   replaceChildren() { this.children = []; }
   remove() { this.parent.children = this.parent.children.filter(el => el !== this); }
-  setAttribute() {}
+  setAttribute(name, value) { (this.attributes ||= {})[name] = String(value); }
+  getAttribute(name) { return this.attributes?.[name] ?? null; }
+  removeAttribute(name) { if (this.attributes) delete this.attributes[name]; }
   focus() { this.focused = true; }
   querySelectorAll(selector) { return selector === '.choice' ? this.choices : []; }
 }
@@ -105,7 +107,7 @@ async function frontend(page, prefs, extra = {}) {
   elements['#chatForm button[type="submit"]'] = new Element();
   const scenarios = ['コンビニ', '学校'].map(scenario => { const el = new Element(); el.dataset.scenario = scenario; return el; });
   if (page === 'review') {
-    for (const id of ['flashcard','reviewPosition','reviewActions','reviewError','rateAgain','rateHard','rateGood','revealCard','deckList','addWordForm','addWordFields','addWordSubmit','addWordError','addWordStatus','wordTerm','wordReading','wordMeaning','wordExample']) elements[`#${id}`] = new Element();
+    for (const id of ['flashcard','reviewPosition','reviewActions','reviewError','rateAgain','rateHard','rateGood','revealCard','flashFront','flashBack','deckList','addWordForm','addWordFields','addWordSubmit','addWordError','addWordStatus','wordTerm','wordReading','wordMeaning','wordExample']) elements[`#${id}`] = new Element();
     elements['#addWordForm'].reset = () => { for (const id of ['wordTerm','wordReading','wordMeaning','wordExample']) elements[`#${id}`].value = ''; };
   }
   const body = new Element(); body.dataset.page = page;
@@ -253,7 +255,7 @@ test('language UI translates basic labels, keeps learning content, and persists 
 
 
 test('Vietnamese mode translates instructions, dynamic counters, headings and page title', () => {
- const cases=[['今日やることだけに集中しましょう。','Hãy tập trung vào việc học hôm nay.'],['おはよう、Lanさん。','Chào bạn, Lan.'],['0 / 25分','0 / 25 phút'],['N5 文法','Ngữ pháp N5'],['語彙 18','Từ vựng 18'],['第05課','Bài 05'],['守 Shu','守 — Xem mẫu'],['保存しました。','Đã lưu.'],['単語を追加','Thêm từ mới'],['カードに追加','Thêm vào flashcard'],['この単語はすでにカードにあります。','Từ này đã có trong bộ flashcard.']];
+ const cases=[['今日やることだけに集中しましょう。','Hãy tập trung vào việc học hôm nay.'],['おはよう、Lanさん。','Chào bạn, Lan.'],['0 / 25分','0 / 25 phút'],['N5 文法','Ngữ pháp N5'],['語彙 18','Từ vựng 18'],['第05課','Bài 05'],['守 Shu','守 — Xem mẫu'],['保存しました。','Đã lưu.'],['単語を追加','Thêm từ mới'],['自分のカードを作成','Tự tạo flashcard'],['ベトナム語の意味（必須）','Nghĩa tiếng Việt (bắt buộc)'],['表に戻す','Lật về mặt trước'],['カードに追加','Thêm vào flashcard'],['この単語はすでにカードにあります。','Từ này đã có trong bộ flashcard.']];
  const nodes=cases.map(([textContent])=>({textContent,parentElement:{closest:()=>null,setAttribute(){}}}));
  const document={body:{querySelectorAll:()=>[]},title:'今日の復習 — KOTOBA',documentElement:{},querySelector:()=>null,querySelectorAll:()=>[],createTreeWalker:()=>{let i=0;return {nextNode:()=>nodes[i++]||null}}};
  vm.runInNewContext(readFileSync(new URL('../public/ui-language.js',import.meta.url),'utf8'),{document,window:{KOTOBA_UI_LANGUAGE:'vi'},NodeFilter:{SHOW_TEXT:4},MutationObserver:class{observe(){}}});
@@ -396,16 +398,16 @@ test('manual flashcard save failure keeps input, prevents concurrent submits and
   assert.ok(el['#addWordError'].classes.has('hidden'));
 });
 
-test('manual meanings remain visible in Japanese mode without examples and review failures keep the current card', async () => {
+test('Vietnamese meanings remain visible in Japanese mode without examples and review failures keep the current card', async () => {
   for(const stage of [0,1,2,3]){
     let fail=true;
     const prefs={level:'N3',onboardingCompleted:true};
-    const original={term:'工夫',meaning:'方法を考えること',reading:'くふう',source:'手入力',stage,example:'',due:'2000-01-01',reviews:4};
+    const original={term:'工夫',meaning:'sự khéo léo',reading:'くふう',source:'手入力',stage,example:'',due:'2000-01-01',reviews:4};
     const page=await frontend('review',prefs,{state:{prefs,deck:[original]},fetch:async()=>fail
       ?Response.json({detail:'保存できませんでした。もう一度お試しください。'},{status:503})
       :Response.json({ok:true,stage:Math.min(3,stage+1),interval:14,due:'2099-01-01'})});
     const el=page.elements;
-    assert.match(el['#flashcard'].innerHTML,/方法を考えること/);
+    assert.match(el['#flashcard'].innerHTML,/sự khéo léo/);
     assert.ok(!el['#flashcard'].innerHTML.includes('文脈から'));
     await el['#rateGood'].onclick();
     assert.equal(el['#flashcard'].dataset.term,'工夫');
@@ -418,4 +420,71 @@ test('manual meanings remain visible in Japanese mode without examples and revie
     assert.ok(el['#reviewActions'].classes.has('hidden'));
     assert.ok(el['#reviewError'].classes.has('hidden'));
   }
+});
+
+test('cards flip both ways by button, click and keyboard and reset for the next card', async () => {
+  const prefs={level:'N5',onboardingCompleted:true};
+  const deck=[{term:'学校',meaning:'trường học',stage:0,due:'2000-01-01'},{term:'猫',meaning:'mèo',stage:0,due:'2000-01-01'}];
+  const page=await frontend('review',prefs,{state:{prefs,deck},fetch:async()=>Response.json({ok:true,stage:1,interval:3,due:'2099-01-01'})});
+  const el=page.elements,card=el['#flashcard'],button=el['#revealCard'];
+  assert.equal(card.getAttribute('role'),'button');
+  assert.equal(card.getAttribute('tabindex'),'0');
+  assert.equal(card.getAttribute('aria-pressed'),'false');
+  assert.equal(el['#flashFront'].getAttribute('aria-hidden'),'false');
+  assert.equal(el['#flashBack'].getAttribute('aria-hidden'),'true');
+  button.onclick();
+  assert.ok(card.classes.has('flipped'));
+  assert.equal(button.textContent,'表に戻す');
+  assert.equal(button.getAttribute('aria-pressed'),'true');
+  assert.equal(card.getAttribute('aria-labelledby'),'flashBack');
+  assert.equal(el['#flashFront'].getAttribute('aria-hidden'),'true');
+  assert.equal(el['#flashBack'].getAttribute('aria-hidden'),'false');
+  card.listeners.click();
+  assert.ok(!card.classes.has('flipped'));
+  let prevented=0;
+  const key=key=>card.listeners.keydown({target:card,key,preventDefault(){prevented++}});
+  key('Enter');assert.ok(card.classes.has('flipped'));
+  key(' ');assert.ok(!card.classes.has('flipped'));
+  key('Escape');assert.equal(prevented,2);
+  card.listeners.keydown({target:button,key:'Enter',preventDefault(){throw new Error('Nested controls must not toggle')}});
+  assert.ok(!card.classes.has('flipped'));
+  card.listeners.click();
+  await el['#rateGood'].onclick();
+  assert.equal(card.dataset.term,'猫');
+  assert.ok(!card.classes.has('flipped'));
+  assert.equal(button.textContent,'答えを見る');
+  assert.equal(card.getAttribute('aria-pressed'),'false');
+  await el['#rateGood'].onclick();
+  assert.ok(button.classes.has('hidden'));
+  assert.equal(card.getAttribute('role'),null);
+  assert.equal(card.getAttribute('aria-labelledby'),null);
+  button.onclick();card.listeners.click();
+  assert.ok(!card.classes.has('flipped'));
+});
+
+test('every review stage keeps Vietnamese meaning on the back in Vietnamese and Japanese UI modes', async () => {
+  for(const level of ['N5','N4','N3','N2','N1']){
+    for(const stage of [0,1,2,3]){
+      const prefs={level,onboardingCompleted:true};
+      const entry={term:'学校',meaning:'trường học',reading:'がっこう',example:'学校へ行きます。',source:'手入力',stage,due:'2000-01-01'};
+      const page=await frontend('review',prefs,{state:{prefs,deck:[entry]}});
+      const html=page.elements['#flashcard'].innerHTML;
+      const [front,back]=html.split('<div class="flash-back"');
+      assert.ok(!front.includes('trường học'));
+      assert.ok(back.includes('trường học'));
+      assert.match(back,/lang="vi" data-flashcard-vietnamese data-learning-content/);
+      assert.match(back,/がっこう/);
+      assert.match(back,/学校へ行きます。/);
+      page.elements['#flashcard'].listeners.click();
+      assert.equal(page.elements['#flashBack'].getAttribute('aria-hidden'),'false');
+    }
+  }
+  const prefs={level:'N3',onboardingCompleted:true};
+  const page=await frontend('review',prefs,{
+    state:{prefs,deck:[{term:'猫',meaning:'',source:'辞書',stage:1,due:'2000-01-01'}]},
+    window:{KOTOBA_DICTIONARY:{猫:{meaningVi:'mèo',meaningJa:'ネコ科の動物'}}}
+  });
+  assert.ok(page.elements['#flashcard'].innerHTML.split('<div class="flash-back"')[1].includes('mèo'));
+  const languageRules=page.context.document.head.children[0].textContent;
+  assert.match(languageRules,/\[lang="vi"\]:not\(\[data-flashcard-vietnamese\]\)/);
 });

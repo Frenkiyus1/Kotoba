@@ -323,3 +323,13 @@ html[lang="vi"] [data-lang="ja"]{display:none!important}
 .word-editor .btn{width:100%}.word-editor fieldset:disabled{opacity:.65}
 .form-error{color:var(--danger);font-size:14px}.word-status{color:var(--matcha);font-size:14px}
 .word-status:empty{display:none}.flashcard,.deck-item{overflow-wrap:anywhere}
+
+.flashcard[role="button"]{cursor:pointer}
+.flashcard[role="button"]:focus-visible{outline:3px solid var(--vermilion);outline-offset:4px}
+.flash-front,.flash-back{max-width:100%;transform-origin:center}
+.flashcard.flipped .flash-back,.flashcard:not(.flipped) .flash-front{animation:flashcard-turn .25s ease-out}
+.flash-meaning-label{margin:20px 0 4px;color:var(--muted);font-size:14px}
+.flash-meaning{margin:0;font-family:"Segoe UI",Arial,system-ui,sans-serif;font-size:26px;line-height:1.5}
+.flash-hint{font-size:13px;margin-top:24px}.flash-toggle{text-align:center;margin-top:16px}
+@keyframes flashcard-turn{from{opacity:0;transform:perspective(900px) rotateY(-90deg)}to{opacity:1;transform:perspective(900px) rotateY(0)}}
+@media(prefers-reduced-motion:reduce){.flashcard .flash-front,.flashcard .flash-back{animation:none}}

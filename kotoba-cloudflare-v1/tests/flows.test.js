@@ -4,6 +4,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import worker from '../src/index.js';
+import { STARTER_FLASHCARDS } from '../src/data/flashcards.js';
 
 function environment() {
   const db = new DatabaseSync(':memory:');
@@ -33,7 +34,8 @@ test('new account chooses level once; refresh and login retain it; another accou
   try {
     const first = await account(env);
     assert.equal(first.state.prefs.onboardingCompleted, false);
-    assert.deepEqual(first.state.deck, []);
+    assert.equal(first.state.deck.length, 30);
+    assert.ok(first.state.deck.every(card => card.stage === 0 && card.reviews === 0));
     assert.equal(first.state.activity.streak, 0);
     assert.equal((await call(env, '/state/prefs', { value: { ...first.state.prefs, level: 'N3', onboardingCompleted: true } }, first.token, 'PUT')).status, 200);
     const refreshed = await (await call(env, '/state', undefined, first.token, 'GET')).json();
@@ -298,7 +300,7 @@ test('AI quota, model, timeout and capacity failures have distinct actionable er
  }finally{env.db.close()}
 });
 
-test('manual flashcards save through the Worker, survive reload, resume review and stay private', async () => {
+test('manual flashcards save alongside starter words, survive reload and stay private', async () => {
   const env=environment();
   try {
     const {token}=await account(env);
@@ -308,34 +310,36 @@ test('manual flashcards save through the Worker, survive reload, resume review a
     const initial=await readState();
     const page=await frontend('review',initial.prefs,{state:initial,fetch:apiFetch});
     const el=page.elements;
-    assert.equal(el['#reviewPosition'].textContent,'0 / 0');
-    assert.match(el['#flashcard'].innerHTML,/まだカードがありません/);
-    assert.ok(el['#reviewActions'].classes.has('hidden'));
+    assert.equal(initial.deck.length,30);
+    assert.equal(el['#reviewPosition'].textContent,'1 / 30');
+    assert.ok(!el['#reviewActions'].classes.has('hidden'));
     el['#wordTerm'].value='  経験  ';
     el['#wordReading'].value='  けいけん  ';
     el['#wordMeaning'].value='kinh nghiệm <img src=x onerror=alert(1)>';
     el['#wordExample'].value='  新しい経験をしました。  ';
     await el['#addWordForm'].listeners.submit(event);
     const saved=(await readState()).deck;
-    assert.equal(saved.length,1);
-    assert.equal(saved[0].term,'経験');
-    assert.equal(saved[0].reading,'けいけん');
-    assert.equal(saved[0].example,'新しい経験をしました。');
-    assert.equal(saved[0].source,'手入力');
-    assert.equal(saved[0].stage,0);
-    assert.equal(saved[0].due,new Date().toISOString().slice(0,10));
+    assert.equal(saved.length,31);
+    const custom=saved.find(card=>card.term==='経験');
+    assert.equal(custom.reading,'けいけん');
+    assert.equal(custom.example,'新しい経験をしました。');
+    assert.equal(custom.source,'手入力');
+    assert.equal(custom.stage,0);
+    assert.equal(custom.due,new Date().toISOString().slice(0,10));
     assert.match(el['#addWordStatus'].textContent,/Đã thêm/);
-    assert.ok(!el['#reviewActions'].classes.has('hidden'));
-    assert.equal(el['#reviewPosition'].textContent,'1 / 1');
+    assert.equal(el['#wordTerm'].value,'');
+    for(let i=0;i<30;i++)await el['#rateGood'].onclick();
+    assert.equal(el['#reviewPosition'].textContent,'31 / 31');
+    assert.equal(el['#flashcard'].dataset.term,'経験');
     assert.match(el['#flashcard'].innerHTML,/&lt;img/);
     assert.ok(!el['#flashcard'].innerHTML.includes('<img'));
-    assert.equal(el['#wordTerm'].value,'');
     el['#revealCard'].onclick();
     assert.ok(el['#flashcard'].classes.has('flipped'));
     await el['#rateGood'].onclick();
     assert.ok(el['#reviewActions'].classes.has('hidden'));
-    assert.equal((await readState()).deck[0].reviews,1);
-    assert.equal((await readState()).deck[0].stage,1);
+    const reviewed=(await readState()).deck.find(card=>card.term==='経験');
+    assert.equal(reviewed.reviews,1);
+    assert.equal(reviewed.stage,1);
     el['#wordTerm'].value='図書館';
     el['#wordMeaning'].value='thư viện';
     await el['#addWordForm'].listeners.submit(event);
@@ -346,10 +350,12 @@ test('manual flashcards save through the Worker, survive reload, resume review a
     const fresh=await readState();
     const reload=await frontend('review',fresh.prefs,{state:fresh,fetch:apiFetch});
     assert.equal(reload.elements['#flashcard'].dataset.term,'図書館');
-    assert.equal(JSON.parse(reload.storage.get('kotoba.deck')).length,2);
+    assert.equal(JSON.parse(reload.storage.get('kotoba.deck')).length,32);
     const other=await account(env,'other@example.com');
     const otherState=await (await call(env,'/state',undefined,other.token,'GET')).json();
-    assert.deepEqual(otherState.deck,[]);
+    assert.equal(otherState.deck.length,30);
+    assert.ok(!otherState.deck.some(card=>['経験','図書館'].includes(card.term)));
+    assert.ok(otherState.deck.every(card=>card.reviews===0&&card.stage===0));
     assert.equal((await call(env,'/vocabulary/upsert',{term:'猫'})).status,401);
   } finally {env.db.close()}
 });
@@ -487,4 +493,38 @@ test('every review stage keeps Vietnamese meaning on the back in Vietnamese and 
   assert.ok(page.elements['#flashcard'].innerHTML.split('<div class="flash-back"')[1].includes('mèo'));
   const languageRules=page.context.document.head.children[0].textContent;
   assert.match(languageRules,/\[lang="vi"\]:not\(\[data-flashcard-vietnamese\]\)/);
+});
+
+test('starter pack has exactly 30 distinct words with readings, Vietnamese meanings and context', () => {
+  assert.equal(STARTER_FLASHCARDS.length,30);
+  assert.equal(new Set(STARTER_FLASHCARDS.map(card=>card.term)).size,30);
+  for(const card of STARTER_FLASHCARDS){
+    assert.match(card.term,/[ぁ-ゖァ-ヺ一-鿿]/);
+    assert.match(card.reading,/^[ぁ-ゖー]+$/);
+    assert.ok(card.meaning.trim());
+    assert.ok(card.example.includes(card.term));
+    assert.equal(card.source,'N5');
+    assert.ok(!['学校','昨日','友達','細胞膜'].includes(card.term));
+  }
+});
+
+test('existing accounts receive missing starter cards once without losing custom content or review progress', async () => {
+  const env=environment();
+  try {
+    const {token,state}=await account(env);
+    env.db.prepare('DELETE FROM vocabulary WHERE user_id = ?').run(state.user.id);
+    const existing={term:'明日',reading:'あす',meaning:'ngày mai (ghi chú của tôi)',example:'明日は休みです。',source:'手入力',stage:3,interval:30,due:'2099-01-01',reviews:8,exposures:5,lastSeen:'2026-01-01'};
+    assert.equal((await call(env,'/vocabulary/upsert',existing,token)).status,200);
+    assert.equal((await call(env,'/vocabulary/upsert',{term:'猫',meaning:'mèo',source:'手入力'},token)).status,200);
+    const readState=async()=> (await call(env,'/state',undefined,token,'GET')).json();
+    const first=await readState();
+    assert.equal(first.deck.length,31);
+    assert.deepEqual(first.deck.find(card=>card.term==='明日'),existing);
+    assert.ok(first.deck.some(card=>card.term==='猫'&&card.meaning==='mèo'));
+    assert.ok(STARTER_FLASHCARDS.every(word=>first.deck.some(card=>card.term===word.term)));
+    assert.deepEqual((await readState()).deck,first.deck);
+    const login=await (await call(env,'/auth/login',{email:'new@example.com',password:'secret123'})).json();
+    assert.deepEqual(login.state.deck,first.deck);
+    assert.equal(env.db.prepare('SELECT COUNT(*) AS count FROM vocabulary WHERE user_id = ?').get(state.user.id).count,31);
+  } finally {env.db.close()}
 });

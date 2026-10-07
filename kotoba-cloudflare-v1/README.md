@@ -229,6 +229,9 @@ npx wrangler d1 execute kotoba-db --remote --file=./database/migration-onboardin
 
 Không chạy migration này nếu cột đã tồn tại. Migration giữ trình độ của người học cũ và đánh dấu đã hoàn tất; tài khoản mới vẫn bắt đầu chưa hoàn tất. Tài khoản demo trong seed được đánh dấu đã chọn trình độ.
 
+## Bộ flashcard cơ bản
+
+Ứng dụng có thêm 30 từ tiếng Nhật cơ bản về gia đình, đồ vật, ăn uống và sinh hoạt, kèm cách đọc, nghĩa tiếng Việt và câu ví dụ. Thẻ được tự thêm theo tài khoản khi tải dữ liệu học tập, có thể lật xem nghĩa tiếng Việt ở mặt sau. Từ đã có giữ nguyên nội dung và lịch ôn; tải lại hoặc đăng nhập lại không tạo thẻ trùng.
 ## Kiểm tra sửa lỗi
 
 ```powershell

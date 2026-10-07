@@ -1,8 +1,9 @@
 import { HttpError, isPlainObject } from './http.js';
+import { STARTER_FLASHCARDS } from '../data/flashcards.js';
 
 /**
  * D1-backed learner state for KOTOBA.
- * New accounts start with clean progress and must complete JLPT onboarding.
+ * New accounts start with unreviewed starter cards and must complete JLPT onboarding.
  */
 
 export function todayISO() {
@@ -45,7 +46,7 @@ function prefsFromRow(row) {
 
 /**
  * Create a CLEAN learner profile for a newly registered user.
- * Demo/sample data belongs in seed.sql only, not in real user registration.
+ * Demo progress belongs in seed.sql; starter vocabulary is added when loading state.
  */
 export async function seedUser(env, userId) {
   const statements = [
@@ -107,6 +108,22 @@ async function errorsFor(env, userId) {
   }));
 }
 
+async function withStarterVocabulary(env, userId, deck) {
+  const existingTerms = new Set(deck.map(card => card.term));
+  const missing = STARTER_FLASHCARDS.filter(card => !existingTerms.has(card.term));
+  if (!missing.length) return deck;
+
+  const today = todayISO();
+  await env.DB.batch(missing.map(card => env.DB.prepare(
+    `INSERT OR IGNORE INTO vocabulary
+     (user_id, term, reading, meaning, example, source, stage, interval_days,
+      due, reviews, exposures, last_seen)
+     VALUES(?, ?, ?, ?, ?, ?, 0, 0, ?, 0, 1, ?)`,
+  ).bind(userId, card.term, card.reading, card.meaning, card.example, card.source, today, today)));
+
+  return vocabularyFor(env, userId);
+}
+
 /** Return complete app state after register/login/refresh. */
 export async function stateFor(env, userId) {
   const user = await env.DB.prepare(
@@ -117,13 +134,15 @@ export async function stateFor(env, userId) {
 
   if (!user) throw new HttpError(401, 'ユーザーが見つかりません。');
 
-  const [prefs, activity, dailyRows, deck, errors] = await Promise.all([
+  const [prefs, activity, dailyRows, storedDeck, errors] = await Promise.all([
     env.DB.prepare('SELECT * FROM preferences WHERE user_id = ?').bind(userId).first(),
     env.DB.prepare('SELECT * FROM activity WHERE user_id = ?').bind(userId).first(),
     env.DB.prepare('SELECT study_date, tasks_json FROM daily WHERE user_id = ?').bind(userId).all(),
     vocabularyFor(env, userId),
     errorsFor(env, userId),
   ]);
+
+  const deck = await withStarterVocabulary(env, userId, storedDeck);
 
   const daily = {};
   for (const row of dailyRows.results || []) {

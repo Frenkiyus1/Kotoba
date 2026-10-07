@@ -315,3 +315,11 @@ html[lang="vi"] .nav-links a{padding:8px 0}
 html[lang="vi"] .nav-links a.active:after{bottom:2px}
 
 html[lang="vi"] [data-lang="ja"]{display:none!important}
+
+.review-heading{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.review-sidebar{display:flex;flex-direction:column;gap:20px;min-width:0}
+.word-editor{padding:20px}.word-editor h2{font-size:22px;margin:6px 0}.word-editor p{font-size:14px}
+.word-editor fieldset{border:0;padding:0;margin:0;min-width:0}.word-editor textarea{resize:vertical}
+.word-editor .btn{width:100%}.word-editor fieldset:disabled{opacity:.65}
+.form-error{color:var(--danger);font-size:14px}.word-status{color:var(--matcha);font-size:14px}
+.word-status:empty{display:none}.flashcard,.deck-item{overflow-wrap:anywhere}

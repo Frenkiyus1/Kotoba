@@ -2,6 +2,24 @@
 'use strict';
 const language=window.KOTOBA_UI_LANGUAGE||'ja';
 const labels={
+  "自分の単語": "Từ vựng của bạn",
+  "単語を追加": "Thêm từ mới",
+  "日本語と意味を入力すると、今日から復習できます。": "Nhập từ tiếng Nhật và nghĩa để bắt đầu ôn ngay.",
+  "日本語の単語（必須）": "Từ tiếng Nhật (bắt buộc)",
+  "読み方（任意）": "Cách đọc (tùy chọn)",
+  "意味（必須）": "Nghĩa (bắt buộc)",
+  "例文（任意）": "Câu ví dụ (tùy chọn)",
+  "単語の意味を入力してください": "Nhập nghĩa của từ",
+  "カードに追加": "Thêm vào flashcard",
+  "保存中…": "Đang lưu…",
+  "手入力": "Tự nhập",
+  "日本語の単語を入力してください。": "Hãy nhập một từ tiếng Nhật.",
+  "意味を入力してください。": "Hãy nhập nghĩa của từ.",
+  "入力が長すぎます。短くしてください。": "Nội dung quá dài. Hãy rút ngắn lại.",
+  "この単語はすでにカードにあります。": "Từ này đã có trong bộ flashcard.",
+  "まだカードがありません。": "Bạn chưa có flashcard.",
+  "単語を追加して、復習を始めましょう。": "Thêm từ mới để bắt đầu ôn tập.",
+
   "ホーム": "Trang chủ",
   "学習": "Học tập",
   "生物で学ぶ": "Học qua sinh học",

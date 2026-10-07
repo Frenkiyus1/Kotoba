@@ -16,7 +16,8 @@
   const languageStyle=document.createElement('style');
   languageStyle.textContent='body[data-interface-mode="ja-only"] .vi,body[data-interface-mode="ja-only"] [lang="vi"],body[data-interface-mode="ja-only"] [data-lang="vi"]{display:none!important}';
   document.head.appendChild(languageStyle);
-  function learningMeaning(card){if(supportsVietnamese())return card.meaning||'';const entry=window.KOTOBA_DICTIONARY?.[card.term];return entry?.meaningJa||entry?.usage||card.example||'この語の使い方を例文で確認してください。'}
+  function learningMeaning(card){if(supportsVietnamese()||card.source==='手入力')return card.meaning||'';const entry=window.KOTOBA_DICTIONARY?.[card.term];return entry?.meaningJa||entry?.usage||card.example||'この語の使い方を例文で確認してください。'}
+  const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   async function persistPrefs(value){await api('/state/prefs',{method:'PUT',body:JSON.stringify({value})});applyServerState(await api('/state'));applyLanguageMode()}
 
   async function api(path,opts={}){const headers=Object.assign({'Content-Type':'application/json'},opts.headers||{});const token=localStorage.getItem(STORE.token);if(token)headers.Authorization=`Bearer ${token}`;const res=await fetch(`${API}${path}`,Object.assign({},opts,{headers}));let data=null;try{data=await res.json()}catch(e){}if(!res.ok){if(res.status===401&&path!=='/auth/login'&&path!=='/auth/register'){localStorage.removeItem(STORE.token)}throw new Error(data?.detail||`HTTP ${res.status}`)}return data}
@@ -995,8 +996,101 @@ function initDictionary() {
 
   // review page
   if(document.body.dataset.page==='review')initReview();
-  function initReview(){let deck=load(STORE.deck,[]);let due=deck.filter(c=>c.due<=todayKey());if(!due.length)due=deck.slice(0,5);let idx=0;const card=$('#flashcard');const render=()=>{if(!due.length){card.innerHTML='<h2>今日の復習は完了しました。</h2><p class="muted">よくできました。</p>';$('#reviewActions').classList.add('hidden');return}const c=due[idx%due.length];card.classList.remove('flipped');card.dataset.term=c.term;let front='',back='';if((c.stage||0)===0){front=`<div class="flash-prompt">意味を思い出してください</div><div class="flash-front-main jp">${c.term}</div>`;back=`<h2 class="jp">${c.term}</h2><div>${c.reading}</div><h3>${learningMeaning(c)}</h3>`}else if(c.stage===1){front=`<div class="flash-prompt">日本語で言ってください</div><div class="flash-front-main" style="font-size:32px">${learningMeaning(c)}</div>`;back=`<h2 class="jp">${c.term}</h2><div>${c.reading}</div>`}else if(c.stage===2){front=`<div class="flash-prompt">文脈から思い出してください</div><div class="context-example jp">${(c.example||'').replace(c.term,'＿＿＿')}</div>`;back=`<h2 class="jp">${c.term}</h2><div class="context-example jp">${c.example||''}</div>`}else{front=`<div class="flash-prompt">この語を使って、自分の文を一つ考えてください</div><div class="flash-front-main jp">${c.term}</div>`;back=`<h2 class="jp">${c.term}</h2><div class="context-example jp">例：${c.example||''}</div><p class="muted">次は会話の中で使ってみましょう。</p>`}card.innerHTML=`<span class="source-badge">${c.source||'学習'}</span><div class="flash-front">${front}<button class="btn btn-secondary" id="revealCard">答えを見る</button></div><div class="flash-back">${back}</div>`;$('#revealCard').onclick=()=>card.classList.add('flipped');$('#reviewPosition').textContent=`${idx+1} / ${due.length}`;renderDeckList(deck)};const rate=kind=>{const term=card.dataset.term;const real=deck.find(x=>x.term===term);if(!real)return;real.reviews=(real.reviews||0)+1;const intervals=kind==='again'?[0,0,1,1]:kind==='hard'?[1,1,3,5]:[1,3,7,14,30];if(kind==='again'){real.stage=Math.max(0,(real.stage||0)-1);real.interval=0}else{real.stage=Math.min(3,(real.stage||0)+1);real.interval=intervals[Math.min(real.stage,intervals.length-1)]}const d=new Date();d.setDate(d.getDate()+(real.interval||0));real.due=d.toISOString().slice(0,10);save(STORE.deck,deck);idx++;if(idx>=due.length){due=[]}render()};$('#rateAgain').onclick=()=>rate('again');$('#rateHard').onclick=()=>rate('hard');$('#rateGood').onclick=()=>rate('good');render()}
-  function renderDeckList(deck){const el=$('#deckList');if(!el)return;el.innerHTML=deck.slice().reverse().slice(0,8).map(c=>`<div class="deck-item"><div><b class="jp">${c.term}</b><div class="muted" style="font-size:12px">${c.source||'学習'}</div></div><span>${c.due<=todayKey()?'今日':'予定'}</span></div>`).join('')}
+  function initReview(){
+    const deck=load(STORE.deck,[]);
+    let due=deck.filter(c=>c.due<=todayKey());
+    if(!due.length)due=deck.slice(0,5);
+    let idx=0,busy=false;
+    const card=$('#flashcard'),form=$('#addWordForm');
+    const fields=$('#addWordFields'),submit=$('#addWordSubmit');
+    const error=$('#addWordError'),status=$('#addWordStatus');
+    const ratingButtons=[$('#rateAgain'),$('#rateHard'),$('#rateGood')];
+    const setBusy=value=>{
+      busy=value;
+      fields.disabled=value;
+      ratingButtons.forEach(button=>button.disabled=value);
+      submit.textContent=value?'保存中…':'カードに追加';
+    };
+    const render=()=>{
+      renderDeckList(deck);
+      card.classList.remove('flipped');
+      const c=due[idx];
+      $('#reviewActions').classList.toggle('hidden',!c);
+      $('#reviewPosition').textContent=`${c?idx+1:due.length} / ${due.length}`;
+      if(!c){
+        delete card.dataset.term;
+        card.innerHTML=deck.length
+          ?'<h2>今日の復習は完了しました。</h2><p class="muted">よくできました。</p>'
+          :'<h2>まだカードがありません。</h2><p class="muted">単語を追加して、復習を始めましょう。</p>';
+        return;
+      }
+      card.dataset.term=c.term;
+      const term=escapeHtml(c.term),reading=escapeHtml(c.reading),meaning=escapeHtml(learningMeaning(c));
+      const example=escapeHtml(c.example);
+      let front='',back='';
+      if((c.stage||0)===0){
+        front=`<div class="flash-prompt">意味を思い出してください</div><div class="flash-front-main jp">${term}</div>`;
+        back=`<h2 class="jp">${term}</h2><div data-learning-content>${reading}</div><h3 data-learning-content>${meaning}</h3>`;
+      }else if(c.stage===1||!c.example){
+        front=`<div class="flash-prompt">日本語で言ってください</div><div class="flash-front-main" style="font-size:32px">${meaning}</div>`;
+        back=`<h2 class="jp">${term}</h2><div data-learning-content>${reading}</div>`;
+      }else if(c.stage===2){
+        front=`<div class="flash-prompt">文脈から思い出してください</div><div class="context-example jp">${escapeHtml(c.example.replace(c.term,'＿＿＿'))}</div>`;
+        back=`<h2 class="jp">${term}</h2><div class="context-example jp">${example}</div>`;
+      }else{
+        front=`<div class="flash-prompt">この語を使って、自分の文を一つ考えてください</div><div class="flash-front-main jp">${term}</div>`;
+        back=`<h2 class="jp">${term}</h2><div class="context-example jp">例：${example}</div><p class="muted">次は会話の中で使ってみましょう。</p>`;
+      }
+      card.innerHTML=`<span class="source-badge">${escapeHtml(c.source||'学習')}</span><div class="flash-front">${front}<button class="btn btn-secondary" id="revealCard">答えを見る</button></div><div class="flash-back">${back}</div>`;
+      $('#revealCard').onclick=()=>card.classList.add('flipped');
+    };
+    const rate=async rating=>{
+      if(busy)return;
+      const real=deck.find(c=>c.term===card.dataset.term);
+      if(!real)return;
+      const reviewError=$('#reviewError');
+      reviewError.classList.add('hidden');
+      setBusy(true);
+      try{
+        const result=await api('/vocabulary/review',{method:'POST',body:JSON.stringify({term:real.term,rating})});
+        Object.assign(real,{stage:result.stage,interval:result.interval,due:result.due,reviews:(real.reviews||0)+1});
+        rawSave(STORE.deck,deck);
+        idx++;
+        render();
+      }catch(ex){
+        reviewError.textContent=ex.message||'保存できませんでした。もう一度お試しください。';
+        reviewError.classList.remove('hidden');
+      }finally{setBusy(false)}
+    };
+    ratingButtons.forEach((button,i)=>button.onclick=()=>rate(['again','hard','good'][i]));
+    form.addEventListener('submit',async e=>{
+      e.preventDefault();
+      if(busy)return;
+      error.classList.add('hidden');
+      status.textContent='';
+      const term=$('#wordTerm').value.trim(),reading=$('#wordReading').value.trim();
+      const meaning=$('#wordMeaning').value.trim(),example=$('#wordExample').value.trim();
+      const fail=(message,input)=>{error.textContent=message;error.classList.remove('hidden');input?.focus()};
+      if(!term||!hasJapanese(term))return fail('日本語の単語を入力してください。',$('#wordTerm'));
+      if(!meaning)return fail('意味を入力してください。',$('#wordMeaning'));
+      if(term.length>100||reading.length>100||meaning.length>500||example.length>1000)return fail('入力が長すぎます。短くしてください。');
+      if(deck.some(c=>c.term===term))return fail('この単語はすでにカードにあります。',$('#wordTerm'));
+      const newCard={term,reading,meaning,example,source:'手入力',stage:0,interval:0,due:todayKey(),reviews:0,exposures:1,lastSeen:todayKey()};
+      setBusy(true);
+      try{
+        await api('/vocabulary/upsert',{method:'POST',body:JSON.stringify(newCard)});
+        deck.push(newCard);
+        rawSave(STORE.deck,deck);
+        due.push(newCard);
+        render();
+        form.reset();
+        status.textContent=supportsVietnamese()?`Đã thêm “${term}” vào flashcard.`:`「${term}」をカードに追加しました。`;
+      }catch(ex){fail(ex.message||'保存できませんでした。もう一度お試しください。')}
+      finally{setBusy(false)}
+    });
+    render();
+  }
+  function renderDeckList(deck){const el=$('#deckList');if(!el)return;el.innerHTML=deck.slice().reverse().slice(0,8).map(c=>`<div class="deck-item"><div><b class="jp">${escapeHtml(c.term)}</b><div class="muted" style="font-size:12px">${escapeHtml(c.source||'学習')}</div></div><span>${c.due<=todayKey()?'今日':'予定'}</span></div>`).join('')}
 
   // conversation
   if(document.body.dataset.page==='conversation')initConversation();

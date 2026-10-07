@@ -94,6 +94,7 @@ class Element {
   replaceChildren() { this.children = []; }
   remove() { this.parent.children = this.parent.children.filter(el => el !== this); }
   setAttribute() {}
+  focus() { this.focused = true; }
   querySelectorAll(selector) { return selector === '.choice' ? this.choices : []; }
 }
 async function frontend(page, prefs, extra = {}) {
@@ -103,9 +104,13 @@ async function frontend(page, prefs, extra = {}) {
   if (page !== 'onboarding') delete elements['#onboardingForm'];
   elements['#chatForm button[type="submit"]'] = new Element();
   const scenarios = ['コンビニ', '学校'].map(scenario => { const el = new Element(); el.dataset.scenario = scenario; return el; });
+  if (page === 'review') {
+    for (const id of ['flashcard','reviewPosition','reviewActions','reviewError','rateAgain','rateHard','rateGood','revealCard','deckList','addWordForm','addWordFields','addWordSubmit','addWordError','addWordStatus','wordTerm','wordReading','wordMeaning','wordExample']) elements[`#${id}`] = new Element();
+    elements['#addWordForm'].reset = () => { for (const id of ['wordTerm','wordReading','wordMeaning','wordExample']) elements[`#${id}`].value = ''; };
+  }
   const body = new Element(); body.dataset.page = page;
   const document = { getElementById: id => elements[`#${id}`] ?? null, body, head: new Element(), createElement: () => new Element(), querySelector: s => elements[s] ?? null, querySelectorAll: s => s === '.scenario-btn' ? scenarios : [] };
-  const state = { user: { name: 'Learner' }, prefs, daily: {}, deck: [], errors: [], activity: { days: {}, streak: 0 } };
+  const state = { user: { name: 'Learner' }, prefs, daily: {}, deck: [], errors: [], activity: { days: {}, streak: 0 }, ...extra.state };
   const storage = new Map([['kotoba.token', 'token'], ...Object.entries(extra.storage || {})]);
   const location = { replace(url) { this.href = url; } };
   const fetch = async (url, opts) => {
@@ -248,7 +253,7 @@ test('language UI translates basic labels, keeps learning content, and persists 
 
 
 test('Vietnamese mode translates instructions, dynamic counters, headings and page title', () => {
- const cases=[['今日やることだけに集中しましょう。','Hãy tập trung vào việc học hôm nay.'],['おはよう、Lanさん。','Chào bạn, Lan.'],['0 / 25分','0 / 25 phút'],['N5 文法','Ngữ pháp N5'],['語彙 18','Từ vựng 18'],['第05課','Bài 05'],['守 Shu','守 — Xem mẫu'],['保存しました。','Đã lưu.']];
+ const cases=[['今日やることだけに集中しましょう。','Hãy tập trung vào việc học hôm nay.'],['おはよう、Lanさん。','Chào bạn, Lan.'],['0 / 25分','0 / 25 phút'],['N5 文法','Ngữ pháp N5'],['語彙 18','Từ vựng 18'],['第05課','Bài 05'],['守 Shu','守 — Xem mẫu'],['保存しました。','Đã lưu.'],['単語を追加','Thêm từ mới'],['カードに追加','Thêm vào flashcard'],['この単語はすでにカードにあります。','Từ này đã có trong bộ flashcard.']];
  const nodes=cases.map(([textContent])=>({textContent,parentElement:{closest:()=>null,setAttribute(){}}}));
  const document={body:{querySelectorAll:()=>[]},title:'今日の復習 — KOTOBA',documentElement:{},querySelector:()=>null,querySelectorAll:()=>[],createTreeWalker:()=>{let i=0;return {nextNode:()=>nodes[i++]||null}}};
  vm.runInNewContext(readFileSync(new URL('../public/ui-language.js',import.meta.url),'utf8'),{document,window:{KOTOBA_UI_LANGUAGE:'vi'},NodeFilter:{SHOW_TEXT:4},MutationObserver:class{observe(){}}});
@@ -289,4 +294,128 @@ test('AI quota, model, timeout and capacity failures have distinct actionable er
    assert.equal(response.status,status);assert.ok((await response.json()).detail.includes(detail));
   }
  }finally{env.db.close()}
+});
+
+test('manual flashcards save through the Worker, survive reload, resume review and stay private', async () => {
+  const env=environment();
+  try {
+    const {token}=await account(env);
+    env.db.exec('UPDATE preferences SET onboarding_completed = 1');
+    const readState=async()=> (await call(env,'/state',undefined,token,'GET')).json();
+    const apiFetch=(url,opts)=>call(env,url.slice('/api'.length),JSON.parse(opts.body),token,opts.method);
+    const initial=await readState();
+    const page=await frontend('review',initial.prefs,{state:initial,fetch:apiFetch});
+    const el=page.elements;
+    assert.equal(el['#reviewPosition'].textContent,'0 / 0');
+    assert.match(el['#flashcard'].innerHTML,/まだカードがありません/);
+    assert.ok(el['#reviewActions'].classes.has('hidden'));
+    el['#wordTerm'].value='  経験  ';
+    el['#wordReading'].value='  けいけん  ';
+    el['#wordMeaning'].value='kinh nghiệm <img src=x onerror=alert(1)>';
+    el['#wordExample'].value='  新しい経験をしました。  ';
+    await el['#addWordForm'].listeners.submit(event);
+    const saved=(await readState()).deck;
+    assert.equal(saved.length,1);
+    assert.equal(saved[0].term,'経験');
+    assert.equal(saved[0].reading,'けいけん');
+    assert.equal(saved[0].example,'新しい経験をしました。');
+    assert.equal(saved[0].source,'手入力');
+    assert.equal(saved[0].stage,0);
+    assert.equal(saved[0].due,new Date().toISOString().slice(0,10));
+    assert.match(el['#addWordStatus'].textContent,/Đã thêm/);
+    assert.ok(!el['#reviewActions'].classes.has('hidden'));
+    assert.equal(el['#reviewPosition'].textContent,'1 / 1');
+    assert.match(el['#flashcard'].innerHTML,/&lt;img/);
+    assert.ok(!el['#flashcard'].innerHTML.includes('<img'));
+    assert.equal(el['#wordTerm'].value,'');
+    el['#revealCard'].onclick();
+    assert.ok(el['#flashcard'].classes.has('flipped'));
+    await el['#rateGood'].onclick();
+    assert.ok(el['#reviewActions'].classes.has('hidden'));
+    assert.equal((await readState()).deck[0].reviews,1);
+    assert.equal((await readState()).deck[0].stage,1);
+    el['#wordTerm'].value='図書館';
+    el['#wordMeaning'].value='thư viện';
+    await el['#addWordForm'].listeners.submit(event);
+    assert.equal(el['#flashcard'].dataset.term,'図書館');
+    assert.ok(!el['#reviewActions'].classes.has('hidden'));
+    assert.match(el['#deckList'].innerHTML,/経験/);
+    assert.match(el['#deckList'].innerHTML,/図書館/);
+    const fresh=await readState();
+    const reload=await frontend('review',fresh.prefs,{state:fresh,fetch:apiFetch});
+    assert.equal(reload.elements['#flashcard'].dataset.term,'図書館');
+    assert.equal(JSON.parse(reload.storage.get('kotoba.deck')).length,2);
+    const other=await account(env,'other@example.com');
+    const otherState=await (await call(env,'/state',undefined,other.token,'GET')).json();
+    assert.deepEqual(otherState.deck,[]);
+    assert.equal((await call(env,'/vocabulary/upsert',{term:'猫'})).status,401);
+  } finally {env.db.close()}
+});
+
+test('manual flashcard validation rejects blank, non-Japanese, oversized and duplicate entries', async () => {
+  let requests=0;
+  const prefs={level:'N5',onboardingCompleted:true};
+  const page=await frontend('review',prefs,{state:{prefs,deck:[{term:'学校',meaning:'trường học',stage:0,due:'2000-01-01'}]},fetch:async()=>{requests++;return Response.json({ok:true})}});
+  const el=page.elements,send=()=>el['#addWordForm'].listeners.submit(event);
+  for(const [term,meaning] of [['','nghĩa'],['school','trường học'],['猫','   '],['猫'.repeat(101),'mèo'],['猫','m'.repeat(501)],['  学校  ','trường học']]){
+    el['#wordTerm'].value=term;el['#wordMeaning'].value=meaning;
+    await send();
+    assert.ok(!el['#addWordError'].classes.has('hidden'));
+    assert.equal(JSON.parse(page.storage.get('kotoba.deck')).length,1);
+  }
+  assert.equal(requests,0);
+  assert.match(el['#addWordError'].textContent,/すでに/);
+});
+
+test('manual flashcard save failure keeps input, prevents concurrent submits and can be retried', async () => {
+  let requests=0,resolve;
+  const page=await frontend('review',{level:'N4',onboardingCompleted:true},{fetch:async()=>{
+    requests++;
+    if(requests===1)return new Promise(done=>{resolve=done});
+    return Response.json({ok:true});
+  }});
+  const el=page.elements;
+  el['#wordTerm'].value='猫';
+  el['#wordMeaning'].value='mèo';
+  const pending=el['#addWordForm'].listeners.submit(event);
+  assert.equal(el['#addWordFields'].disabled,true);
+  assert.equal(el['#rateGood'].disabled,true);
+  await el['#addWordForm'].listeners.submit(event);
+  assert.equal(requests,1);
+  assert.deepEqual(JSON.parse(page.storage.get('kotoba.deck')),[]);
+  resolve(Response.json({detail:'保存できませんでした。もう一度お試しください。'},{status:503}));
+  await pending;
+  assert.equal(el['#wordTerm'].value,'猫');
+  assert.equal(el['#wordMeaning'].value,'mèo');
+  assert.equal(el['#addWordFields'].disabled,false);
+  assert.ok(!el['#addWordError'].classes.has('hidden'));
+  assert.equal(el['#addWordStatus'].textContent,'');
+  await el['#addWordForm'].listeners.submit(event);
+  assert.equal(requests,2);
+  assert.equal(JSON.parse(page.storage.get('kotoba.deck')).length,1);
+  assert.ok(el['#addWordError'].classes.has('hidden'));
+});
+
+test('manual meanings remain visible in Japanese mode without examples and review failures keep the current card', async () => {
+  for(const stage of [0,1,2,3]){
+    let fail=true;
+    const prefs={level:'N3',onboardingCompleted:true};
+    const original={term:'工夫',meaning:'方法を考えること',reading:'くふう',source:'手入力',stage,example:'',due:'2000-01-01',reviews:4};
+    const page=await frontend('review',prefs,{state:{prefs,deck:[original]},fetch:async()=>fail
+      ?Response.json({detail:'保存できませんでした。もう一度お試しください。'},{status:503})
+      :Response.json({ok:true,stage:Math.min(3,stage+1),interval:14,due:'2099-01-01'})});
+    const el=page.elements;
+    assert.match(el['#flashcard'].innerHTML,/方法を考えること/);
+    assert.ok(!el['#flashcard'].innerHTML.includes('文脈から'));
+    await el['#rateGood'].onclick();
+    assert.equal(el['#flashcard'].dataset.term,'工夫');
+    assert.equal(JSON.parse(page.storage.get('kotoba.deck'))[0].reviews,4);
+    assert.ok(!el['#reviewError'].classes.has('hidden'));
+    assert.equal(el['#rateGood'].disabled,false);
+    fail=false;
+    await el['#rateGood'].onclick();
+    assert.equal(JSON.parse(page.storage.get('kotoba.deck'))[0].reviews,5);
+    assert.ok(el['#reviewActions'].classes.has('hidden'));
+    assert.ok(el['#reviewError'].classes.has('hidden'));
+  }
 });

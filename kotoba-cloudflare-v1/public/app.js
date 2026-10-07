@@ -1254,9 +1254,112 @@ function initDictionary() {
 
   // personalized
   if(document.body.dataset.page==='personalized')initPersonalized();
-  function initPersonalized(){const errs=load(STORE.errors,[]).sort((a,b)=>b.count-a.count);$('#errorPanel').innerHTML=errs.map(e=>`<div class="error-chip"><span>${e.key}<small class="muted"> ${e.type}</small></span><b>${e.count}回</b></div>`).join('');const target=errs[0]?.key||'過去形';$('#personalTarget').textContent=target;renderPersonalExercise(target)}
-  function renderPersonalExercise(target){const q=$('#personalExercise');if(/は \/ が/.test(target)){q.innerHTML=`<p class="exercise-question jp">___ は学生です。___ が日本語を勉強しています。</p><div class="answer-grid"><button class="answer" data-personal="wrong">私 / 私</button><button class="answer" data-personal="correct">私は / 私が</button><button class="answer" data-personal="wrong">私が / 私は</button></div>`}else{q.innerHTML=`<p class="exercise-question jp">昨日、友達と映画を ______。</p><div class="answer-grid"><button class="answer" data-personal="wrong">見ます</button><button class="answer" data-personal="correct">見ました</button><button class="answer" data-personal="wrong">見て</button></div>`}$$('[data-personal]',q).forEach(b=>b.onclick=()=>{const ok=b.dataset.personal==='correct';b.classList.add(ok?'correct':'wrong');$('#personalFeedback').textContent=ok?'正解です。次は会話で使ってみましょう。':'このポイントはもう一度復習に入れます。';if(!ok)addError(target,'文法')})}
-
+  function initPersonalized(){
+    const errors=load(STORE.errors,[]).map(error=>({...error})).sort((a,b)=>b.count-a.count);
+    const completed=new Set();
+    const panel=$('#errorPanel'),target=$('#personalTarget'),feedback=$('#personalFeedback');
+    const next=$('#personalNext'),restart=$('#personalRestart'),progress=$('#personalProgress');
+    let active=-1;
+    const message=(vi,ja)=>supportsVietnamese()?vi:ja;
+    function updateProgress(){
+      progress.textContent=message(`Đã luyện: ${completed.size} / ${errors.length}`,`練習済み: ${completed.size} / ${errors.length}`);
+    }
+    function renderPanel(){
+      panel.replaceChildren();
+      errors.forEach((error,index)=>{
+        const button=document.createElement('button');
+        button.type='button';button.className='error-chip';
+        button.classList.toggle('active',index===active);
+        if(index===active)button.setAttribute('aria-current','true');
+        const label=document.createElement('span');
+        const key=document.createElement('strong');key.textContent=error.key;key.dataset.learningContent='';
+        const type=document.createElement('small');type.className='muted';type.textContent=error.type;
+        label.appendChild(key);label.appendChild(type);
+        const status=document.createElement('span');status.className='error-status';
+        const count=document.createElement('b');count.textContent=`${error.count}回`;status.appendChild(count);
+        if(completed.has(index)){
+          const done=document.createElement('small');done.className='personal-done';done.textContent='練習済み';status.appendChild(done);
+        }
+        button.appendChild(label);button.appendChild(status);
+        button.onclick=()=>{show(index);target.focus()};panel.appendChild(button);
+      });
+    }
+    function pendingIndex(){
+      for(let offset=1;offset<=errors.length;offset++){
+        const index=(active+offset)%errors.length;
+        if(!completed.has(index))return index;
+      }
+      return -1;
+    }
+    function show(index){
+      active=index;const error=errors[index];
+      target.textContent=error.key;
+      next.classList.remove('hidden');restart.classList.add('hidden');
+      next.disabled=!completed.has(index);
+      next.textContent=completed.size===errors.length?'練習を終える':'次の弱点 →';
+      feedback.classList.remove('hidden');
+      feedback.textContent=completed.has(index)?'この弱点は練習済みです。次へ進みましょう。':'答えてから次の弱点に進みましょう。';
+      renderPanel();updateProgress();
+      renderPersonalExercise(error.key,ok=>{
+        if(ok){
+          completed.add(index);next.disabled=false;
+          next.textContent=completed.size===errors.length?'練習を終える':'次の弱点 →';
+          feedback.textContent='正解です。次の弱点へ進めます。';next.focus();
+        }else{
+          addError(error.key,error.type);error.count++;
+          feedback.textContent='もう一度答えてみましょう。正解すると次へ進めます。';
+        }
+        renderPanel();updateProgress();
+      },completed.has(index));
+    }
+    function finish(){
+      active=-1;target.textContent='今日の弱点練習が完了しました。';
+      $('#personalExercise').textContent=message('Bạn có thể luyện lại hoặc dùng kiến thức vừa ôn trong hội thoại.','もう一度練習するか、会話で使ってみましょう。');
+      feedback.textContent='';feedback.classList.add('hidden');
+      next.disabled=true;next.classList.add('hidden');restart.classList.remove('hidden');
+      renderPanel();updateProgress();restart.focus();
+    }
+    next.onclick=()=>{
+      if(next.disabled||active<0||!completed.has(active))return;
+      const index=pendingIndex();
+      if(index<0)finish();else{show(index);target.focus()}
+    };
+    restart.onclick=()=>{completed.clear();show(0);target.focus()};
+    if(errors.length){show(0)}else{
+      panel.textContent='まだ弱点はありません。';target.textContent='まだ弱点はありません。';
+      $('#personalExercise').textContent=message('Hãy tiếp tục học. Các lỗi cần ôn sẽ xuất hiện ở đây.','学習を続けると、復習が必要なポイントがここに表示されます。');
+      next.disabled=true;next.classList.add('hidden');restart.classList.add('hidden');feedback.classList.add('hidden');updateProgress();
+    }
+  }
+  function renderPersonalExercise(target,onAnswer,completed=false){
+    const exercise=/は\s*\/\s*が/.test(target)?{
+      question:'田中さん ___ 学生です。だれ ___ 日本語を勉強していますか。',
+      answers:['は / は','は / が','が / は'],correct:1
+    }:/生物の専門語/.test(target)?{
+      question:'細胞の内側と外側を分ける部分は、どれですか。',
+      answers:['核','細胞膜','ミトコンドリア'],correct:1
+    }:{
+      question:'昨日、友達と映画を ______。',
+      answers:['見ます','見ました','見て'],correct:1
+    };
+    const root=$('#personalExercise');root.replaceChildren();
+    const question=document.createElement('p');question.className='exercise-question jp';question.textContent=exercise.question;
+    const grid=document.createElement('div');grid.className='answer-grid';
+    const buttons=[];let answered=completed;
+    exercise.answers.forEach((answer,index)=>{
+      const button=document.createElement('button');button.type='button';button.className='answer';button.textContent=answer;
+      const correct=index===exercise.correct;button.dataset.personal=correct?'correct':'wrong';button.disabled=completed;
+      if(completed&&correct)button.classList.add('correct');
+      button.onclick=()=>{
+        if(button.disabled||answered)return;
+        button.classList.add(correct?'correct':'wrong');button.disabled=true;
+        if(correct){answered=true;buttons.forEach(choice=>{choice.disabled=true})}
+        onAnswer(correct);
+      };
+      buttons.push(button);grid.appendChild(button);
+    });
+    root.appendChild(question);root.appendChild(grid);
+  }
   // progress
   if(document.body.dataset.page==='progress')initProgress();
   function initProgress(){const deck=load(STORE.deck,[]),errs=load(STORE.errors,[]),activity=load(STORE.activity,{streak:7,totalMinutes:0,days:{}});$('#progressWords').textContent=deck.length;$('#progressStreak').textContent=activity.streak||0;$('#progressErrors').textContent=errs.reduce((s,e)=>s+e.count,0);const skill={語彙:Math.min(92,55+deck.length*2),漢字:66,文法:Math.max(48,76-errs.filter(e=>e.type==='文法').reduce((s,e)=>s+e.count,0)),読解:64,聴解:57,会話:52};$('#skillBars').innerHTML=Object.entries(skill).map(([k,v])=>`<div class="skill-row-progress"><span>${k}</span><div class="progress-track"><span style="width:${v}%"></span></div><b>${v}%</b></div>`).join('')}

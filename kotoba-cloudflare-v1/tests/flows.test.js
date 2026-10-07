@@ -115,6 +115,9 @@ async function frontend(page, prefs, extra = {}) {
     for (const id of ['flashcard','reviewPosition','reviewActions','reviewError','rateAgain','rateHard','rateGood','revealCard','flashFront','flashBack','deckList','addWordForm','addWordFields','addWordSubmit','addWordError','addWordStatus','wordTerm','wordReading','wordMeaning','wordExample','wordTopic','reviewTopics','reviewTopicSummary']) elements[`#${id}`] = new Element();
     elements['#addWordForm'].reset = () => { for (const id of ['wordTerm','wordReading','wordMeaning','wordExample','wordTopic','reviewTopics','reviewTopicSummary']) elements[`#${id}`].value = ''; };
   }
+  if (page === 'personalized') {
+    for (const id of ['errorPanel','personalTarget','personalExercise','personalFeedback','personalNext','personalRestart','personalProgress']) elements[`#${id}`] = new Element();
+  }
   const body = new Element(); body.dataset.page = page;
   const document = { getElementById: id => elements[`#${id}`] ?? null, body, head: new Element(), createElement: () => new Element(), querySelector: s => elements[s] ?? null, querySelectorAll: s => s === '.scenario-btn' ? scenarios : [] };
   const state = { user: { name: 'Learner' }, prefs, daily: {}, deck: [], errors: [], activity: { days: {}, streak: 0 }, ...extra.state };
@@ -659,4 +662,108 @@ test('bulk initialization and full-deck synchronization fit D1 limits and preser
     assert.deepEqual(refreshed.deck.find(card=>card.term==='今日'),original);
     assert.equal(env.db.prepare('SELECT COUNT(*) AS count FROM vocabulary').get().count,211);
   }finally{env.db.close()}
+});
+
+function personalAnswers(page) {
+  return page.elements['#personalExercise'].children.find(el => el.className === 'answer-grid').children;
+}
+function solvePersonal(page) {
+  personalAnswers(page).find(button => button.dataset.personal === 'correct').onclick();
+}
+
+test('weakness practice advances through every target, completes and restarts', async () => {
+  const errors = [{key:'生物の専門語',type:'語彙',count:1},{key:'過去形',type:'文法',count:3},{key:'は / が',type:'文法',count:5}];
+  const page = await frontend('personalized', {level:'N5',onboardingCompleted:true}, {state:{errors}});
+  const {elements,storage} = page;
+  const next = elements['#personalNext'];
+  assert.equal(elements['#personalTarget'].textContent, 'は / が');
+  assert.equal(next.disabled, true);
+  assert.equal(elements['#personalProgress'].textContent, 'Đã luyện: 0 / 3');
+  solvePersonal(page);
+  assert.equal(next.disabled, false);
+  assert.ok(personalAnswers(page).every(button => button.disabled));
+  assert.equal(elements['#personalProgress'].textContent, 'Đã luyện: 1 / 3');
+  next.onclick();
+  assert.equal(elements['#personalTarget'].textContent, '過去形');
+  assert.equal(next.disabled, true);
+  assert.ok(personalAnswers(page).every(button => !button.disabled && !button.classes.has('correct')));
+  assert.equal(elements['#personalFeedback'].textContent, '答えてから次の弱点に進みましょう。');
+  solvePersonal(page);next.onclick();
+  assert.equal(elements['#personalTarget'].textContent, '生物の専門語');
+  assert.ok(personalAnswers(page).some(button => button.textContent === '細胞膜'));
+  solvePersonal(page);
+  assert.equal(next.textContent, '練習を終える');
+  next.onclick();
+  assert.equal(elements['#personalTarget'].textContent, '今日の弱点練習が完了しました。');
+  assert.equal(elements['#personalProgress'].textContent, 'Đã luyện: 3 / 3');
+  assert.ok(next.classes.has('hidden'));
+  assert.ok(!elements['#personalRestart'].classes.has('hidden'));
+  assert.equal(elements['#errorPanel'].children.length, 3);
+  assert.deepEqual(JSON.parse(storage.get('kotoba.errors')), errors);
+  elements['#personalRestart'].onclick();
+  assert.equal(elements['#personalTarget'].textContent, 'は / が');
+  assert.equal(elements['#personalProgress'].textContent, 'Đã luyện: 0 / 3');
+  assert.equal(next.disabled, true);
+  assert.ok(!next.classes.has('hidden'));
+});
+
+test('weakness list supports direct selection and next skips completed targets then wraps', async () => {
+  const page = await frontend('personalized', {level:'N4',onboardingCompleted:true}, {state:{errors:[{key:'は / が',type:'文法',count:5},{key:'過去形',type:'文法',count:3},{key:'生物の専門語',type:'語彙',count:1}]}});
+  const {elements} = page;
+  elements['#errorPanel'].children[1].onclick();
+  assert.equal(elements['#personalTarget'].textContent, '過去形');
+  assert.equal(elements['#errorPanel'].children[1].getAttribute('aria-current'), 'true');
+  solvePersonal(page);
+  elements['#errorPanel'].children[0].onclick();
+  solvePersonal(page);elements['#personalNext'].onclick();
+  assert.equal(elements['#personalTarget'].textContent, '生物の専門語');
+  assert.equal(elements['#personalProgress'].textContent, 'Đã luyện: 2 / 3');
+  elements['#errorPanel'].children[1].onclick();
+  assert.ok(personalAnswers(page).every(button => button.disabled));
+  assert.equal(elements['#personalNext'].disabled, false);
+  elements['#personalNext'].onclick();
+  assert.equal(elements['#personalTarget'].textContent, '生物の専門語');
+  // Restart a new session by solving the remaining target, then begin at the last target.
+  solvePersonal(page);elements['#personalNext'].onclick();elements['#personalRestart'].onclick();
+  elements['#errorPanel'].children[2].onclick();solvePersonal(page);elements['#personalNext'].onclick();
+  assert.equal(elements['#personalTarget'].textContent, 'は / が');
+});
+
+test('wrong weakness answer stays retryable, records the correct error type once and blocks advancing', async () => {
+  const writes = [];
+  const page = await frontend('personalized', {level:'N5',onboardingCompleted:true}, {
+    state:{errors:[{key:'生物の専門語',type:'語彙',count:1},{key:'過去形',type:'文法',count:1}]},
+    fetch:async(url,opts)=>{writes.push({url,value:JSON.parse(opts.body).value});return Response.json({ok:true})}
+  });
+  const wrong = personalAnswers(page).find(button => button.dataset.personal === 'wrong');
+  wrong.onclick();wrong.onclick();
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].url, '/api/state/errors');
+  assert.deepEqual(writes[0].value, [{key:'生物の専門語',type:'語彙',count:2},{key:'過去形',type:'文法',count:1}]);
+  assert.equal(page.elements['#personalNext'].disabled, true);
+  page.elements['#personalNext'].onclick();
+  assert.equal(page.elements['#personalTarget'].textContent, '生物の専門語');
+  solvePersonal(page);solvePersonal(page);
+  assert.equal(page.elements['#personalProgress'].textContent, 'Đã luyện: 1 / 2');
+  assert.equal(writes.length, 1);
+  page.elements['#personalNext'].onclick();
+  assert.equal(page.elements['#personalTarget'].textContent, '過去形');
+});
+
+test('one weakness finishes without inventing another target and Japanese mode keeps its progress label', async () => {
+  const page = await frontend('personalized', {level:'N3',onboardingCompleted:true}, {state:{errors:[{key:'過去形',type:'文法',count:2}]}});
+  assert.equal(page.elements['#personalProgress'].textContent, '練習済み: 0 / 1');
+  solvePersonal(page);page.elements['#personalNext'].onclick();
+  assert.equal(page.elements['#personalProgress'].textContent, '練習済み: 1 / 1');
+  assert.equal(page.elements['#personalTarget'].textContent, '今日の弱点練習が完了しました。');
+  assert.equal(page.elements['#errorPanel'].children.length, 1);
+});
+
+test('an account with no weaknesses shows an empty state instead of a fabricated exercise', async () => {
+  const page = await frontend('personalized', {level:'N5',onboardingCompleted:true});
+  assert.equal(page.elements['#personalTarget'].textContent, 'まだ弱点はありません。');
+  assert.equal(page.elements['#personalExercise'].children.length, 0);
+  assert.ok(page.elements['#personalNext'].classes.has('hidden'));
+  assert.ok(page.elements['#personalRestart'].classes.has('hidden'));
+  assert.equal(page.elements['#personalProgress'].textContent, 'Đã luyện: 0 / 0');
 });

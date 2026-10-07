@@ -2,6 +2,16 @@
 'use strict';
 const language=window.KOTOBA_UI_LANGUAGE||'ja';
 const labels={
+  "次の弱点 →": "Điểm yếu tiếp theo →",
+  "練習を終える": "Hoàn thành bài luyện",
+  "もう一度練習する": "Luyện lại",
+  "練習済み": "Đã luyện",
+  "今日の弱点練習が完了しました。": "Bạn đã luyện xong các điểm yếu.",
+  "この弱点は練習済みです。次へ進みましょう。": "Bạn đã luyện mục này. Hãy chuyển sang mục tiếp theo.",
+  "答えてから次の弱点に進みましょう。": "Trả lời đúng để chuyển sang điểm yếu tiếp theo.",
+  "正解です。次の弱点へ進めます。": "Đúng rồi. Bạn có thể chuyển sang điểm yếu tiếp theo.",
+  "もう一度答えてみましょう。正解すると次へ進めます。": "Hãy thử lại. Trả lời đúng để chuyển sang mục tiếp theo.",
+  "まだ弱点はありません。": "Bạn chưa có điểm yếu cần ôn.",
   "テーマを選ぶ": "Chọn chủ đề",
   "会話と同じテーマで、各30語を復習できます。": "Ôn 30 từ mỗi chủ đề, giống phần Hội thoại.",
   "テーマ": "Chủ đề",

@@ -342,3 +342,16 @@ html[lang="vi"] [data-lang="ja"]{display:none!important}
 .review-topic-btn:disabled{opacity:.6;cursor:wait}.review-topic-btn:focus-visible{outline:3px solid var(--vermilion);outline-offset:2px}
 #reviewTopicSummary{margin-bottom:0}#deckList{max-height:420px;overflow-y:auto}
 @media(max-width:520px){.review-topics{grid-template-columns:repeat(2,minmax(0,1fr))}.review-topic-btn{padding:10px;font-size:13px}}
+
+/* Weak-point practice navigation */
+button.error-chip{width:100%;background:transparent;border:0;border-bottom:1px solid #ece7de;text-align:left;color:inherit;font:inherit;cursor:pointer;border-radius:10px;align-items:center;overflow-wrap:anywhere}
+button.error-chip:hover{background:#f5f1e9}
+button.error-chip.active{background:#e9f0e7;box-shadow:inset 3px 0 #4b6751}
+button.error-chip:focus-visible{outline:2px solid #4b6751;outline-offset:2px}
+.error-chip strong,.error-chip small{display:block}
+.error-status{flex-shrink:0;text-align:right}
+.personal-done{color:#4b6751;font-weight:700}
+.personal-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:18px}
+.personal-actions button:disabled{opacity:.5;cursor:not-allowed}
+#personalExercise .answer:disabled{cursor:default}
+#personalProgress{margin:10px 0}

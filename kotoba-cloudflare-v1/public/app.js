@@ -10,6 +10,7 @@
   const SECTION_BY_KEY={[STORE.user]:'user',[STORE.prefs]:'prefs',[STORE.daily]:'daily',[STORE.deck]:'deck',[STORE.errors]:'errors',[STORE.activity]:'activity'};
   let syncing=false;
   let serverPrefs=null;
+  let serverFlashcardTopics=[];
   const interfaceMode=level=>['N5','N4'].includes(level)?'vi-support':'ja-only';
   const supportsVietnamese=()=>(!serverPrefs||interfaceMode(serverPrefs.level)==='vi-support')&&window.KOTOBA_UI_LANGUAGE!=='ja';
   function applyLanguageMode(){document.body.dataset.interfaceMode=supportsVietnamese()?'vi-support':'ja-only'}
@@ -17,10 +18,20 @@
   languageStyle.textContent='body[data-interface-mode="ja-only"] .vi,body[data-interface-mode="ja-only"] [lang="vi"]:not([data-flashcard-vietnamese]),body[data-interface-mode="ja-only"] [data-lang="vi"]{display:none!important}';
   document.head.appendChild(languageStyle);
   const escapeHtml=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+  function cardSource(card){
+    const source=card.source||'学習';
+    if(source.startsWith('手入力:')){
+      const id=source.slice('手入力:'.length);
+      const topic=serverFlashcardTopics.find(item=>item.id===id);
+      return supportsVietnamese()?`Tự nhập · ${topic?.labelVi||id}`:`手入力 · ${id}`;
+    }
+    const topic=serverFlashcardTopics.find(item=>item.id===source);
+    return supportsVietnamese()&&topic?topic.labelVi:source;
+  }
   async function persistPrefs(value){await api('/state/prefs',{method:'PUT',body:JSON.stringify({value})});applyServerState(await api('/state'));applyLanguageMode()}
 
   async function api(path,opts={}){const headers=Object.assign({'Content-Type':'application/json'},opts.headers||{});const token=localStorage.getItem(STORE.token);if(token)headers.Authorization=`Bearer ${token}`;const res=await fetch(`${API}${path}`,Object.assign({},opts,{headers}));let data=null;try{data=await res.json()}catch(e){}if(!res.ok){if(res.status===401&&path!=='/auth/login'&&path!=='/auth/register'){localStorage.removeItem(STORE.token)}throw new Error(data?.detail||`HTTP ${res.status}`)}return data}
-  function applyServerState(state){if(!state)return;syncing=true;try{if(state.user)rawSave(STORE.user,state.user);if(state.prefs){serverPrefs=state.prefs;rawSave(STORE.prefs,state.prefs);}if(state.daily)rawSave(STORE.daily,state.daily);if(state.deck)rawSave(STORE.deck,state.deck);if(state.errors)rawSave(STORE.errors,state.errors);if(state.activity)rawSave(STORE.activity,state.activity)}finally{syncing=false}}
+  function applyServerState(state){if(!state)return;syncing=true;try{if(state.user)rawSave(STORE.user,state.user);if(state.prefs){serverPrefs=state.prefs;rawSave(STORE.prefs,state.prefs);}if(state.daily)rawSave(STORE.daily,state.daily);if(state.deck)rawSave(STORE.deck,state.deck);if(state.flashcardTopics)serverFlashcardTopics=state.flashcardTopics;if(state.errors)rawSave(STORE.errors,state.errors);if(state.activity)rawSave(STORE.activity,state.activity)}finally{syncing=false}}
   async function hydrateFromServer(){if(!localStorage.getItem(STORE.token))return false;try{applyServerState(await api('/state'));return true}catch(e){return false}}
   const save=(k,v)=>{rawSave(k,v);const section=SECTION_BY_KEY[k];if(!syncing&&section&&localStorage.getItem(STORE.token)){api(`/state/${section}`,{method:'PUT',body:JSON.stringify({value:v})}).catch(()=>{})}};
   const hasJapanese=t=>/[\u3040-\u30ff\u3400-\u9fff々〆ヵヶ]/.test(t||'');
@@ -996,18 +1007,82 @@ function initDictionary() {
   // review page
   if(document.body.dataset.page==='review')initReview();
   function initReview(){
-    const deck=load(STORE.deck,[]);
-    let due=deck.filter(c=>c.due<=todayKey());
-    if(!due.length)due=deck.slice(0,5);
-    let idx=0,busy=false;
-    const card=$('#flashcard'),form=$('#addWordForm');
-    const fields=$('#addWordFields'),submit=$('#addWordSubmit');
+    const deck=load(STORE.deck,[]),topics=serverFlashcardTopics;
+    const topicKey=`kotoba.reviewTopic.${load(STORE.user,{}).id||'guest'}`;
+    const validTopics=new Set(['all','personal',...topics.map(topic=>topic.id)]);
+    const previousTopic=load(topicKey,null);
+    let activeTopic=validTopics.has(previousTopic)?previousTopic:(topics[0]?.id||'all');
+    const topicLabel=id=>{
+      if(id==='all')return supportsVietnamese()?'Tất cả':'すべて';
+      if(id==='personal')return supportsVietnamese()?'Thẻ tự tạo':'自分のカード';
+      const topic=topics.find(item=>item.id===id);
+      return supportsVietnamese()?(topic?.labelVi||id):id;
+    };
+    const cardsFor=id=>{
+      if(id==='all')return deck;
+      if(id==='personal')return deck.filter(c=>c.source==='手入力'||c.source?.startsWith('手入力:'));
+      const terms=new Set(topics.find(topic=>topic.id===id)?.terms||[]);
+      return deck.filter(c=>terms.has(c.term)||c.source===`手入力:${id}`);
+    };
+    let scopeDeck=[],due=[],idx=0,busy=false;
+    const resetQueue=()=>{
+      scopeDeck=cardsFor(activeTopic);
+      due=scopeDeck.filter(c=>c.due<=todayKey());
+      if(!due.length)due=scopeDeck.slice(0,5);
+      idx=0;
+    };
+    const card=$('#flashcard'),form=$('#addWordForm'),topicPanel=$('#reviewTopics');
+    const fields=$('#addWordFields'),submit=$('#addWordSubmit'),wordTopic=$('#wordTopic');
     const error=$('#addWordError'),status=$('#addWordStatus');
     const ratingButtons=[$('#rateAgain'),$('#rateHard'),$('#rateGood')];
+    const selectTopic=id=>{
+      if(busy||!validTopics.has(id))return;
+      activeTopic=id;
+      rawSave(topicKey,id);
+      wordTopic.value=topics.some(topic=>topic.id===id)?id:'手入力';
+      error.classList.add('hidden');
+      $('#reviewError').classList.add('hidden');
+      status.textContent='';
+      resetQueue();
+      render();
+      Array.from(topicPanel.children).find(button=>button.dataset.reviewTopic===id)?.focus();
+    };
+    const renderTopics=()=>{
+      topicPanel.replaceChildren();
+      for(const id of ['all',...topics.map(topic=>topic.id),'personal']){
+        const button=document.createElement('button');
+        button.type='button';
+        button.className='scenario-btn review-topic-btn';
+        button.dataset.reviewTopic=id;
+        button.classList.toggle('active',id===activeTopic);
+        button.setAttribute('aria-pressed',String(id===activeTopic));
+        button.disabled=busy;
+        const name=document.createElement('span'),count=document.createElement('b');
+        name.textContent=topicLabel(id);
+        count.textContent=String(cardsFor(id).length);
+        button.appendChild(name);
+        button.appendChild(count);
+        button.onclick=()=>selectTopic(id);
+        topicPanel.appendChild(button);
+      }
+      const dueCount=scopeDeck.filter(c=>c.due<=todayKey()).length;
+      $('#reviewTopicSummary').textContent=supportsVietnamese()
+        ?`${topicLabel(activeTopic)} · ${scopeDeck.length} thẻ · ${dueCount} đến hạn`
+        :`${topicLabel(activeTopic)} · ${scopeDeck.length}枚 · 期限のカード ${dueCount}枚`;
+    };
+    for(const id of ['手入力',...topics.map(topic=>topic.id)]){
+      const option=document.createElement('option');
+      option.value=id;
+      option.textContent=id==='手入力'?(supportsVietnamese()?'Thẻ tự tạo':'自分のカード'):topicLabel(id);
+      wordTopic.appendChild(option);
+    }
+    wordTopic.value=topics.some(topic=>topic.id===activeTopic)?activeTopic:'手入力';
+    resetQueue();
     const setBusy=value=>{
       busy=value;
       fields.disabled=value;
       ratingButtons.forEach(button=>button.disabled=value);
+      Array.from(topicPanel.children).forEach(button=>button.disabled=value);
       submit.textContent=value?'保存中…':'カードに追加';
     };
     const reveal=$('#revealCard');
@@ -1033,7 +1108,8 @@ function initDictionary() {
     });
     reveal.onclick=flip;
     const render=()=>{
-      renderDeckList(deck);
+      renderTopics();
+      renderDeckList(scopeDeck);
       const c=due[idx];
       $('#reviewActions').classList.toggle('hidden',!c);
       reveal.classList.toggle('hidden',!c);
@@ -1046,7 +1122,7 @@ function initDictionary() {
         card.removeAttribute('aria-label');
         card.removeAttribute('aria-labelledby');
         card.removeAttribute('aria-pressed');
-        card.innerHTML=deck.length
+        card.innerHTML=scopeDeck.length
           ?'<h2>今日の復習は完了しました。</h2><p class="muted">よくできました。</p>'
           :'<h2>まだカードがありません。</h2><p class="muted">単語を追加して、復習を始めましょう。</p>';
         return;
@@ -1066,7 +1142,7 @@ function initDictionary() {
         front=`<div class="flash-prompt">意味を思い出してください</div><div class="flash-front-main jp">${term}</div>`;
       }
       const back=`<h2 class="jp">${term}</h2><div data-learning-content>${reading}</div><p class="flash-meaning-label">ベトナム語の意味</p><h3 class="flash-meaning" lang="vi" data-flashcard-vietnamese data-learning-content>${meaning}</h3>${example?`<div class="context-example jp">${example}</div>`:''}`;
-      card.innerHTML=`<span class="source-badge">${escapeHtml(c.source||'学習')}</span><div class="flash-front" id="flashFront" aria-hidden="false">${front}<p class="muted flash-hint">カードを押すと裏返せます。</p></div><div class="flash-back" id="flashBack" aria-hidden="true">${back}</div>`;
+      card.innerHTML=`<span class="source-badge">${escapeHtml(cardSource(c))}</span><div class="flash-front" id="flashFront" aria-hidden="false">${front}<p class="muted flash-hint">カードを押すと裏返せます。</p></div><div class="flash-back" id="flashBack" aria-hidden="true">${back}</div>`;
       setFlipped(false);
     };
     const rate=async rating=>{
@@ -1100,22 +1176,33 @@ function initDictionary() {
       if(!meaning)return fail('ベトナム語の意味を入力してください。',$('#wordMeaning'));
       if(term.length>100||reading.length>100||meaning.length>500||example.length>1000)return fail('入力が長すぎます。短くしてください。');
       if(deck.some(c=>c.term===term))return fail('この単語はすでにカードにあります。',$('#wordTerm'));
-      const newCard={term,reading,meaning,example,source:'手入力',stage:0,interval:0,due:todayKey(),reviews:0,exposures:1,lastSeen:todayKey()};
+      const topic=wordTopic.value;
+      if(topic!=='手入力'&&!topics.some(item=>item.id===topic))return fail('テーマを選択してください。',wordTopic);
+      const source=topic==='手入力'?'手入力':'手入力:'+topic;
+      const newCard={term,reading,meaning,example,source,stage:0,interval:0,due:todayKey(),reviews:0,exposures:1,lastSeen:todayKey()};
       setBusy(true);
       try{
         await api('/vocabulary/upsert',{method:'POST',body:JSON.stringify(newCard)});
         deck.push(newCard);
         rawSave(STORE.deck,deck);
-        due.push(newCard);
+        scopeDeck=cardsFor(activeTopic);
+        if(scopeDeck.some(c=>c.term===newCard.term)){
+          due.push(newCard);
+        }else{
+          activeTopic=topic==='手入力'?'personal':topic;
+          rawSave(topicKey,activeTopic);
+          resetQueue();
+        }
         render();
         form.reset();
+        wordTopic.value=topics.some(item=>item.id===activeTopic)?activeTopic:'手入力';
         status.textContent=supportsVietnamese()?`Đã thêm “${term}” vào flashcard.`:`「${term}」をカードに追加しました。`;
       }catch(ex){fail(ex.message||'保存できませんでした。もう一度お試しください。')}
       finally{setBusy(false)}
     });
     render();
   }
-  function renderDeckList(deck){const el=$('#deckList');if(!el)return;el.innerHTML=deck.slice().reverse().slice(0,8).map(c=>`<div class="deck-item"><div><b class="jp">${escapeHtml(c.term)}</b><div class="muted" style="font-size:12px">${escapeHtml(c.source||'学習')}</div></div><span>${c.due<=todayKey()?'今日':'予定'}</span></div>`).join('')}
+  function renderDeckList(deck){const el=$('#deckList');if(!el)return;el.innerHTML=deck.slice().reverse().map(c=>`<div class="deck-item"><div><b class="jp">${escapeHtml(c.term)}</b><div class="muted" style="font-size:12px">${escapeHtml(cardSource(c))}</div></div><span>${c.due<=todayKey()?'今日':'予定'}</span></div>`).join('')}
 
   // conversation
   if(document.body.dataset.page==='conversation')initConversation();

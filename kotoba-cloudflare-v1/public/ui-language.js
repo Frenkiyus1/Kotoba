@@ -2,6 +2,14 @@
 'use strict';
 const language=window.KOTOBA_UI_LANGUAGE||'ja';
 const labels={
+  "テーマを選ぶ": "Chọn chủ đề",
+  "会話と同じテーマで、各30語を復習できます。": "Ôn 30 từ mỗi chủ đề, giống phần Hội thoại.",
+  "テーマ": "Chủ đề",
+  "自分のカード": "Thẻ tự tạo",
+  "すべて": "Tất cả",
+  "選んだテーマの単語": "Từ vựng trong chủ đề",
+  "テーマを選択してください。": "Hãy chọn một chủ đề hợp lệ.",
+
   "ベトナム語の意味（必須）": "Nghĩa tiếng Việt (bắt buộc)",
   "ベトナム語の意味を入力してください": "Nhập nghĩa tiếng Việt",
   "日本語とベトナム語の意味を入力して、自分のカードを作りましょう。": "Tự tạo flashcard bằng từ tiếng Nhật và nghĩa tiếng Việt.",

@@ -229,9 +229,10 @@ npx wrangler d1 execute kotoba-db --remote --file=./database/migration-onboardin
 
 Không chạy migration này nếu cột đã tồn tại. Migration giữ trình độ của người học cũ và đánh dấu đã hoàn tất; tài khoản mới vẫn bắt đầu chưa hoàn tất. Tài khoản demo trong seed được đánh dấu đã chọn trình độ.
 
-## Bộ flashcard cơ bản
+## Flashcard theo chủ đề hội thoại
 
-Ứng dụng có thêm 30 từ tiếng Nhật cơ bản về gia đình, đồ vật, ăn uống và sinh hoạt, kèm cách đọc, nghĩa tiếng Việt và câu ví dụ. Thẻ được tự thêm theo tài khoản khi tải dữ liệu học tập, có thể lật xem nghĩa tiếng Việt ở mặt sau. Từ đã có giữ nguyên nội dung và lịch ôn; tải lại hoặc đăng nhập lại không tạo thẻ trùng.
+Ứng dụng có 7 chủ đề giống phần Hội thoại: cửa hàng tiện lợi, nhà hàng, trường học, bạn bè, nhà ga, du lịch và hội thoại tự do. Mỗi chủ đề có 30 từ, tổng cộng 210 thẻ, kèm cách đọc, nghĩa tiếng Việt và câu ví dụ. Trong Ôn tập, chọn chủ đề để xem danh sách từ và ôn riêng nhóm đó; lựa chọn được nhớ theo tài khoản trong trình duyệt. Khi tự tạo thẻ, bạn có thể chọn chủ đề hoặc để trong Thẻ tự tạo. Thẻ được lưu theo tài khoản, lật được hai chiều và luôn có nghĩa tiếng Việt ở mặt sau. Nội dung và lịch ôn của từ đã có được giữ nguyên; tải lại không tạo thẻ trùng.
+
 ## Kiểm tra sửa lỗi
 
 ```powershell

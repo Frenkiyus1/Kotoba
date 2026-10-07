@@ -12,6 +12,12 @@
   <main class="section">
     <div class="container review-layout">
       <section>
+        <section class="card review-topic-panel" aria-labelledby="reviewTopicsTitle">
+          <h2 id="reviewTopicsTitle">テーマを選ぶ</h2>
+          <p class="muted">会話と同じテーマで、各30語を復習できます。</p>
+          <div class="review-topics" id="reviewTopics" role="group" aria-labelledby="reviewTopicsTitle"></div>
+          <p class="muted" id="reviewTopicSummary" role="status" aria-live="polite"></p>
+        </section>
         <div class="review-heading"><span class="muted">今日のカード</span><b id="reviewPosition">0 / 0</b></div>
         <article class="card flashcard" id="flashcard"></article>
         <div class="flash-toggle"><button class="btn btn-secondary hidden" id="revealCard" type="button" aria-controls="flashcard" aria-pressed="false">答えを見る</button></div>
@@ -29,6 +35,7 @@
           <p class="muted">日本語とベトナム語の意味を入力して、自分のカードを作りましょう。</p>
           <form id="addWordForm">
             <fieldset id="addWordFields">
+              <div class="field"><label for="wordTopic">テーマ</label><select id="wordTopic" name="topic"></select></div>
               <div class="field"><label for="wordTerm">日本語の単語（必須）</label><input id="wordTerm" name="term" lang="ja" required maxlength="100" placeholder="例：図書館" autocomplete="off"></div>
               <div class="field"><label for="wordReading">読み方（任意）</label><input id="wordReading" name="reading" lang="ja" maxlength="100" placeholder="例：としょかん" autocomplete="off"></div>
               <div class="field"><label for="wordMeaning">ベトナム語の意味（必須）</label><input id="wordMeaning" name="meaning" lang="vi" data-flashcard-vietnamese required maxlength="500" placeholder="ベトナム語の意味を入力してください" autocomplete="off"></div>
@@ -39,7 +46,7 @@
             <p class="word-status" id="addWordStatus" role="status" aria-live="polite"></p>
           </form>
         </section>
-        <section class="card deck-list"><span class="eyebrow">今日の単語</span><h3>学習から集まった語</h3><p class="muted">辞書で調べた語も自動でここに入ります。</p><div id="deckList"></div></section>
+        <section class="card deck-list"><span class="eyebrow">今日の単語</span><h3>選んだテーマの単語</h3><p class="muted">辞書で調べた語も自動でここに入ります。</p><div id="deckList"></div></section>
       </aside>
     </div>
   </main>

@@ -4,20 +4,23 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import worker from '../src/index.js';
-import { STARTER_FLASHCARDS } from '../src/data/flashcards.js';
+import { STARTER_FLASHCARDS, FLASHCARD_TOPICS, FLASHCARD_TOPIC_SUMMARIES } from '../src/data/flashcards.js';
 
 function environment() {
   const db = new DatabaseSync(':memory:');
   db.exec(readFileSync(new URL('../database/schema.sql', import.meta.url), 'utf8'));
+  const queryStats = {count:0,maxBindings:0};
+  const track = () => { queryStats.count++; assert.ok(queryStats.count <= 50, "D1 query budget exceeded"); };
   const wrap = (sql, args = []) => ({
-    bind(...values) { return wrap(sql, values); },
-    async first() { return db.prepare(sql).get(...args) ?? null; },
-    async all() { return { results: db.prepare(sql).all(...args) }; },
-    async run() { return db.prepare(sql).run(...args); },
+    bind(...values) { assert.ok(values.length <= 100, "D1 binding limit exceeded"); queryStats.maxBindings = Math.max(queryStats.maxBindings, values.length); return wrap(sql, values); },
+    async first() { track(); return db.prepare(sql).get(...args) ?? null; },
+    async all() { track(); return { results: db.prepare(sql).all(...args) }; },
+    async run() { track(); return db.prepare(sql).run(...args); },
   });
-  return { db, DB: { prepare: wrap, batch: statements => Promise.all(statements.map(s => s.run())) } };
+  return { db, queryStats, DB: { prepare: wrap, batch: statements => Promise.all(statements.map(s => s.run())) } };
 }
 async function call(env, path, body, token, method = 'POST') {
+  env.queryStats.count = 0;
   return worker.fetch(new Request(`https://kotoba.test/api${path}`, {
     method, headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -34,7 +37,7 @@ test('new account chooses level once; refresh and login retain it; another accou
   try {
     const first = await account(env);
     assert.equal(first.state.prefs.onboardingCompleted, false);
-    assert.equal(first.state.deck.length, 30);
+    assert.equal(first.state.deck.length, 210);
     assert.ok(first.state.deck.every(card => card.stage === 0 && card.reviews === 0));
     assert.equal(first.state.activity.streak, 0);
     assert.equal((await call(env, '/state/prefs', { value: { ...first.state.prefs, level: 'N3', onboardingCompleted: true } }, first.token, 'PUT')).status, 200);
@@ -109,8 +112,8 @@ async function frontend(page, prefs, extra = {}) {
   elements['#chatForm button[type="submit"]'] = new Element();
   const scenarios = ['コンビニ', '学校'].map(scenario => { const el = new Element(); el.dataset.scenario = scenario; return el; });
   if (page === 'review') {
-    for (const id of ['flashcard','reviewPosition','reviewActions','reviewError','rateAgain','rateHard','rateGood','revealCard','flashFront','flashBack','deckList','addWordForm','addWordFields','addWordSubmit','addWordError','addWordStatus','wordTerm','wordReading','wordMeaning','wordExample']) elements[`#${id}`] = new Element();
-    elements['#addWordForm'].reset = () => { for (const id of ['wordTerm','wordReading','wordMeaning','wordExample']) elements[`#${id}`].value = ''; };
+    for (const id of ['flashcard','reviewPosition','reviewActions','reviewError','rateAgain','rateHard','rateGood','revealCard','flashFront','flashBack','deckList','addWordForm','addWordFields','addWordSubmit','addWordError','addWordStatus','wordTerm','wordReading','wordMeaning','wordExample','wordTopic','reviewTopics','reviewTopicSummary']) elements[`#${id}`] = new Element();
+    elements['#addWordForm'].reset = () => { for (const id of ['wordTerm','wordReading','wordMeaning','wordExample','wordTopic','reviewTopics','reviewTopicSummary']) elements[`#${id}`].value = ''; };
   }
   const body = new Element(); body.dataset.page = page;
   const document = { getElementById: id => elements[`#${id}`] ?? null, body, head: new Element(), createElement: () => new Element(), querySelector: s => elements[s] ?? null, querySelectorAll: s => s === '.scenario-btn' ? scenarios : [] };
@@ -310,7 +313,7 @@ test('manual flashcards save alongside starter words, survive reload and stay pr
     const initial=await readState();
     const page=await frontend('review',initial.prefs,{state:initial,fetch:apiFetch});
     const el=page.elements;
-    assert.equal(initial.deck.length,30);
+    assert.equal(initial.deck.length,210);
     assert.equal(el['#reviewPosition'].textContent,'1 / 30');
     assert.ok(!el['#reviewActions'].classes.has('hidden'));
     el['#wordTerm'].value='  経験  ';
@@ -319,11 +322,11 @@ test('manual flashcards save alongside starter words, survive reload and stay pr
     el['#wordExample'].value='  新しい経験をしました。  ';
     await el['#addWordForm'].listeners.submit(event);
     const saved=(await readState()).deck;
-    assert.equal(saved.length,31);
+    assert.equal(saved.length,211);
     const custom=saved.find(card=>card.term==='経験');
     assert.equal(custom.reading,'けいけん');
     assert.equal(custom.example,'新しい経験をしました。');
-    assert.equal(custom.source,'手入力');
+    assert.equal(custom.source,'手入力:コンビニ');
     assert.equal(custom.stage,0);
     assert.equal(custom.due,new Date().toISOString().slice(0,10));
     assert.match(el['#addWordStatus'].textContent,/Đã thêm/);
@@ -340,21 +343,21 @@ test('manual flashcards save alongside starter words, survive reload and stay pr
     const reviewed=(await readState()).deck.find(card=>card.term==='経験');
     assert.equal(reviewed.reviews,1);
     assert.equal(reviewed.stage,1);
-    el['#wordTerm'].value='図書館';
-    el['#wordMeaning'].value='thư viện';
+    el['#wordTerm'].value='挑戦';
+    el['#wordMeaning'].value='thử thách';
     await el['#addWordForm'].listeners.submit(event);
-    assert.equal(el['#flashcard'].dataset.term,'図書館');
+    assert.equal(el['#flashcard'].dataset.term,'挑戦');
     assert.ok(!el['#reviewActions'].classes.has('hidden'));
     assert.match(el['#deckList'].innerHTML,/経験/);
-    assert.match(el['#deckList'].innerHTML,/図書館/);
+    assert.match(el['#deckList'].innerHTML,/挑戦/);
     const fresh=await readState();
     const reload=await frontend('review',fresh.prefs,{state:fresh,fetch:apiFetch});
-    assert.equal(reload.elements['#flashcard'].dataset.term,'図書館');
-    assert.equal(JSON.parse(reload.storage.get('kotoba.deck')).length,32);
+    assert.equal(reload.elements['#flashcard'].dataset.term,'挑戦');
+    assert.equal(JSON.parse(reload.storage.get('kotoba.deck')).length,212);
     const other=await account(env,'other@example.com');
     const otherState=await (await call(env,'/state',undefined,other.token,'GET')).json();
-    assert.equal(otherState.deck.length,30);
-    assert.ok(!otherState.deck.some(card=>['経験','図書館'].includes(card.term)));
+    assert.equal(otherState.deck.length,210);
+    assert.ok(!otherState.deck.some(card=>['経験','挑戦'].includes(card.term)));
     assert.ok(otherState.deck.every(card=>card.reviews===0&&card.stage===0));
     assert.equal((await call(env,'/vocabulary/upsert',{term:'猫'})).status,401);
   } finally {env.db.close()}
@@ -495,17 +498,25 @@ test('every review stage keeps Vietnamese meaning on the back in Vietnamese and 
   assert.match(languageRules,/\[lang="vi"\]:not\(\[data-flashcard-vietnamese\]\)/);
 });
 
-test('starter pack has exactly 30 distinct words with readings, Vietnamese meanings and context', () => {
-  assert.equal(STARTER_FLASHCARDS.length,30);
-  assert.equal(new Set(STARTER_FLASHCARDS.map(card=>card.term)).size,30);
-  for(const card of STARTER_FLASHCARDS){
-    assert.match(card.term,/[ぁ-ゖァ-ヺ一-鿿]/);
-    assert.match(card.reading,/^[ぁ-ゖー]+$/);
-    assert.ok(card.meaning.trim());
-    assert.ok(card.example.includes(card.term));
-    assert.equal(card.source,'N5');
-    assert.ok(!['学校','昨日','友達','細胞膜'].includes(card.term));
+test('conversation topics each contain 30 complete flashcards and cover all 210 unique terms', () => {
+  const conversation=readFileSync(new URL('../public/conversation.html',import.meta.url),'utf8');
+  const scenarios=[...conversation.matchAll(/data-scenario="([^"]+)"/g)].map(match=>match[1]);
+  assert.deepEqual(FLASHCARD_TOPICS.map(topic=>topic.id),scenarios);
+  assert.equal(FLASHCARD_TOPICS.length,7);
+  assert.equal(STARTER_FLASHCARDS.length,210);
+  assert.equal(new Set(STARTER_FLASHCARDS.map(card=>card.term)).size,210);
+  for(const topic of FLASHCARD_TOPICS){
+    assert.equal(topic.cards.length,30);
+    assert.ok(topic.labelVi);
+    assert.equal(new Set(topic.cards.map(card=>card.term)).size,30);
+    for(const card of topic.cards){
+      assert.match(card.term,/[ぁ-ゖァ-ヺ一-鿿]/);
+      assert.match(card.reading,/^[ぁ-ゖー]+$/);
+      assert.ok(card.meaning.trim());
+      assert.ok(card.example.includes(card.term));
+    }
   }
+  assert.deepEqual(FLASHCARD_TOPIC_SUMMARIES.map(topic=>topic.terms.length),Array(7).fill(30));
 });
 
 test('existing accounts receive missing starter cards once without losing custom content or review progress', async () => {
@@ -518,13 +529,134 @@ test('existing accounts receive missing starter cards once without losing custom
     assert.equal((await call(env,'/vocabulary/upsert',{term:'猫',meaning:'mèo',source:'手入力'},token)).status,200);
     const readState=async()=> (await call(env,'/state',undefined,token,'GET')).json();
     const first=await readState();
-    assert.equal(first.deck.length,31);
+    assert.equal(first.deck.length,211);
     assert.deepEqual(first.deck.find(card=>card.term==='明日'),existing);
     assert.ok(first.deck.some(card=>card.term==='猫'&&card.meaning==='mèo'));
     assert.ok(STARTER_FLASHCARDS.every(word=>first.deck.some(card=>card.term===word.term)));
     assert.deepEqual((await readState()).deck,first.deck);
     const login=await (await call(env,'/auth/login',{email:'new@example.com',password:'secret123'})).json();
     assert.deepEqual(login.state.deck,first.deck);
-    assert.equal(env.db.prepare('SELECT COUNT(*) AS count FROM vocabulary WHERE user_id = ?').get(state.user.id).count,31);
+    assert.equal(env.db.prepare('SELECT COUNT(*) AS count FROM vocabulary WHERE user_id = ?').get(state.user.id).count,211);
   } finally {env.db.close()}
+});
+
+const topicButton=(page,id)=>page.elements['#reviewTopics'].children.find(button=>button.dataset.reviewTopic===id);
+const topicState=()=>({
+  user:{id:101,name:'Learner'},
+  prefs:{level:'N5',onboardingCompleted:true},
+  deck:STARTER_FLASHCARDS.map(card=>({...card,stage:0,reviews:0,due:'2000-01-01'})),
+  flashcardTopics:FLASHCARD_TOPIC_SUMMARIES,
+});
+
+test('topic buttons filter cards and word lists, reset the flipped face and retain selection per account', async () => {
+  const state=topicState();
+  const page=await frontend('review',state.prefs,{state});
+  const el=page.elements;
+  assert.equal(el['#reviewPosition'].textContent,'1 / 30');
+  assert.equal(topicButton(page,'コンビニ').getAttribute('aria-pressed'),'true');
+  for(const topic of FLASHCARD_TOPICS){
+    el['#revealCard'].onclick();
+    topicButton(page,topic.id).onclick();
+    assert.equal(el['#flashcard'].dataset.term,topic.cards[0].term);
+    assert.equal(el['#reviewPosition'].textContent,'1 / 30');
+    assert.equal(el['#wordTopic'].value,topic.id);
+    assert.equal(topicButton(page,topic.id).focused,true);
+    assert.ok(!el['#flashcard'].classes.has('flipped'));
+    assert.equal((el['#deckList'].innerHTML.match(/class="deck-item"/g)||[]).length,30);
+    assert.match(el['#reviewTopicSummary'].textContent,/30 thẻ/);
+    assert.equal(topicButton(page,topic.id).children[1].textContent,'30');
+    assert.ok(el['#reviewTopicSummary'].textContent.includes(topic.labelVi));
+  }
+  topicButton(page,'旅行').onclick();
+  assert.equal(JSON.parse(page.storage.get('kotoba.reviewTopic.101')),'旅行');
+  const reload=await frontend('review',state.prefs,{state,storage:Object.fromEntries(page.storage)});
+  assert.equal(topicButton(reload,'旅行').getAttribute('aria-pressed'),'true');
+  const otherState={...state,user:{id:202,name:'Other'}};
+  const other=await frontend('review',state.prefs,{state:otherState,storage:Object.fromEntries(page.storage)});
+  assert.equal(topicButton(other,'コンビニ').getAttribute('aria-pressed'),'true');
+  topicButton(page,'all').onclick();
+  assert.equal(el['#reviewPosition'].textContent,'1 / 210');
+  assert.equal((el['#deckList'].innerHTML.match(/class="deck-item"/g)||[]).length,210);
+  topicButton(page,'personal').onclick();
+  assert.ok(el['#reviewActions'].classes.has('hidden'));
+  assert.match(el['#flashcard'].innerHTML,/まだカードがありません/);
+});
+
+test('topic review updates only its card, blocks switching while saving and excludes future cards', async () => {
+  const state=topicState();
+  let resolve,payload;
+  const page=await frontend('review',state.prefs,{state,fetch:async(url,opts)=>{
+    payload=JSON.parse(opts.body);
+    return new Promise(done=>{resolve=done});
+  }});
+  topicButton(page,'レストラン').onclick();
+  const current=page.elements['#flashcard'].dataset.term;
+  const pending=page.elements['#rateGood'].onclick();
+  assert.equal(payload.term,current);
+  assert.equal(payload.rating,'good');
+  assert.ok(page.elements['#reviewTopics'].children.every(button=>button.disabled));
+  topicButton(page,'旅行').onclick();
+  assert.equal(page.elements['#flashcard'].dataset.term,current);
+  resolve(Response.json({ok:true,stage:1,interval:3,due:'2099-01-01'}));
+  await pending;
+  const deck=JSON.parse(page.storage.get('kotoba.deck'));
+  assert.equal(deck.find(card=>card.term===current).reviews,1);
+  assert.ok(deck.filter(card=>card.term!==current).every(card=>card.reviews===0));
+  assert.ok(page.elements['#reviewTopics'].children.every(button=>!button.disabled));
+  topicButton(page,'旅行').onclick();
+  topicButton(page,'レストラン').onclick();
+  assert.equal(page.elements['#reviewPosition'].textContent,'1 / 29');
+  assert.notEqual(page.elements['#flashcard'].dataset.term,current);
+  assert.match(page.elements['#reviewTopicSummary'].textContent,/29 đến hạn/);
+});
+
+test('custom cards belong to the chosen topic and personal deck after reload', async () => {
+  const state=topicState();
+  let payload;
+  const page=await frontend('review',state.prefs,{state,fetch:async(url,opts)=>{
+    payload=JSON.parse(opts.body);return Response.json({ok:true});
+  }});
+  const el=page.elements;
+  el['#wordTerm'].value='経験';
+  el['#wordMeaning'].value='kinh nghiệm';
+  el['#wordTopic'].value='学校';
+  await el['#addWordForm'].listeners.submit(event);
+  assert.equal(payload.source,'手入力:学校');
+  assert.equal(topicButton(page,'学校').getAttribute('aria-pressed'),'true');
+  assert.equal(topicButton(page,'学校').children[1].textContent,'31');
+  assert.equal(topicButton(page,'コンビニ').children[1].textContent,'30');
+  assert.ok(el['#deckList'].innerHTML.includes('kinh nghiệm')===false);
+  assert.ok(el['#deckList'].innerHTML.includes('Tự nhập · Trường học'));
+  topicButton(page,'personal').onclick();
+  assert.equal(el['#flashcard'].dataset.term,'経験');
+  assert.equal(el['#reviewPosition'].textContent,'1 / 1');
+  assert.ok(el['#flashcard'].innerHTML.split('<div class="flash-back"')[1].includes('kinh nghiệm'));
+  const reloadedState={...state,deck:JSON.parse(page.storage.get('kotoba.deck'))};
+  const reload=await frontend('review',state.prefs,{state:reloadedState,storage:Object.fromEntries(page.storage)});
+  assert.equal(reload.elements['#flashcard'].dataset.term,'経験');
+  assert.equal(topicButton(reload,'学校').children[1].textContent,'31');
+  assert.equal(topicButton(reload,'personal').children[1].textContent,'1');
+});
+
+test('bulk initialization and full-deck synchronization fit D1 limits and preserve topic assignments', async () => {
+  const env=environment();
+  try {
+    const {token,state}=await account(env);
+    assert.ok(env.queryStats.count<50);
+    assert.ok(env.queryStats.maxBindings<=100);
+    assert.equal(state.deck.length,210);
+    assert.deepEqual(state.flashcardTopics,FLASHCARD_TOPIC_SUMMARIES);
+    const original=state.deck.find(card=>card.term==='今日');
+    original.reviews=12;original.stage=3;original.interval=30;original.due='2099-01-01';
+    const custom={term:'経験',reading:'けいけん',meaning:'kinh nghiệm',example:'新しい経験です。',source:'手入力:学校',stage:1,interval:3,due:'2099-01-01',reviews:1,exposures:1,lastSeen:'2026-01-01'};
+    assert.equal((await call(env,'/vocabulary/upsert',custom,token)).status,200);
+    const deck=[...state.deck,custom];
+    assert.equal((await call(env,'/state/deck',{value:deck},token,'PUT')).status,200);
+    assert.ok(env.queryStats.count<50);
+    const refreshed=await (await call(env,'/state',undefined,token,'GET')).json();
+    assert.equal(refreshed.deck.length,211);
+    assert.deepEqual(refreshed.deck.find(card=>card.term==='経験'),custom);
+    assert.deepEqual(refreshed.deck.find(card=>card.term==='今日'),original);
+    assert.equal(env.db.prepare('SELECT COUNT(*) AS count FROM vocabulary').get().count,211);
+  }finally{env.db.close()}
 });

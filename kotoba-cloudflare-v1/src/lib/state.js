@@ -1,5 +1,5 @@
 import { HttpError, isPlainObject } from './http.js';
-import { STARTER_FLASHCARDS } from '../data/flashcards.js';
+import { STARTER_FLASHCARDS, FLASHCARD_TOPIC_SUMMARIES } from '../data/flashcards.js';
 
 /**
  * D1-backed learner state for KOTOBA.
@@ -108,18 +108,43 @@ async function errorsFor(env, userId) {
   }));
 }
 
+// Eight rows × twelve bindings stays below D1's 100-parameter query limit.
+// https://developers.cloudflare.com/d1/platform/limits/
+function vocabularyStatements(env, userId, cards, ignoreExisting = false) {
+  const statements = [];
+  for (let offset = 0; offset < cards.length; offset += 8) {
+    const chunk = cards.slice(offset, offset + 8);
+    statements.push(env.DB.prepare(
+      `INSERT ${ignoreExisting ? 'OR IGNORE ' : ''}INTO vocabulary
+       (user_id, term, reading, meaning, example, source, stage, interval_days,
+        due, reviews, exposures, last_seen)
+       VALUES ${chunk.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').join(', ')}`,
+    ).bind(...chunk.flatMap(card => [
+      userId,
+      String(card.term || ''),
+      String(card.reading || ''),
+      String(card.meaning || ''),
+      String(card.example || ''),
+      String(card.source || '学習'),
+      Number(card.stage || 0),
+      Number(card.interval || 0),
+      card.due || todayISO(),
+      Number(card.reviews || 0),
+      Number(card.exposures || 1),
+      card.lastSeen || null,
+    ])));
+  }
+  return statements;
+}
+
 async function withStarterVocabulary(env, userId, deck) {
   const existingTerms = new Set(deck.map(card => card.term));
   const missing = STARTER_FLASHCARDS.filter(card => !existingTerms.has(card.term));
   if (!missing.length) return deck;
 
   const today = todayISO();
-  await env.DB.batch(missing.map(card => env.DB.prepare(
-    `INSERT OR IGNORE INTO vocabulary
-     (user_id, term, reading, meaning, example, source, stage, interval_days,
-      due, reviews, exposures, last_seen)
-     VALUES(?, ?, ?, ?, ?, ?, 0, 0, ?, 0, 1, ?)`,
-  ).bind(userId, card.term, card.reading, card.meaning, card.example, card.source, today, today)));
+  await env.DB.batch(vocabularyStatements(env, userId,
+    missing.map(card => ({ ...card, due: today, lastSeen: today })), true));
 
   return vocabularyFor(env, userId);
 }
@@ -159,6 +184,7 @@ export async function stateFor(env, userId) {
     prefs: prefsFromRow(prefs),
     daily,
     deck,
+    flashcardTopics: FLASHCARD_TOPIC_SUMMARIES,
     errors,
     activity: {
       days: safeJsonParse(activity?.days_json, {}),
@@ -269,32 +295,10 @@ export async function saveStateSection(env, userId, section, value) {
 
   if (section === 'deck') {
     if (!Array.isArray(value)) throw new HttpError(400, 'deck は配列で送信してください。');
-
-    const statements = [env.DB.prepare('DELETE FROM vocabulary WHERE user_id = ?').bind(userId)];
-    for (const card of value) {
-      statements.push(
-        env.DB.prepare(
-          `INSERT INTO vocabulary
-           (user_id, term, reading, meaning, example, source, stage, interval_days,
-            due, reviews, exposures, last_seen)
-           VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        ).bind(
-          userId,
-          String(card.term || ''),
-          String(card.reading || ''),
-          String(card.meaning || ''),
-          String(card.example || ''),
-          String(card.source || '学習'),
-          Number(card.stage || 0),
-          Number(card.interval || 0),
-          card.due || todayISO(),
-          Number(card.reviews || 0),
-          Number(card.exposures || 1),
-          card.lastSeen || null,
-        ),
-      );
-    }
-    await env.DB.batch(statements);
+    await env.DB.batch([
+      env.DB.prepare('DELETE FROM vocabulary WHERE user_id = ?').bind(userId),
+      ...vocabularyStatements(env, userId, value),
+    ]);
     return;
   }
 

@@ -2,6 +2,7 @@
 'use strict';
 const language=window.KOTOBA_UI_LANGUAGE||'ja';
 const labels={
+  "次へ：破 Ha →": "Tiếp → Ha",
   "次の弱点 →": "Điểm yếu tiếp theo →",
   "練習を終える": "Hoàn thành bài luyện",
   "もう一度練習する": "Luyện lại",

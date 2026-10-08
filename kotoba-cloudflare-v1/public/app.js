@@ -85,8 +85,28 @@
   // phase tabs
   $$('.phase-tab').forEach(tab=>tab.addEventListener('click',()=>{const root=tab.closest('[data-phase-root]')||document;$$('.phase-tab',root).forEach(x=>x.classList.remove('active'));tab.classList.add('active');$$('.phase',root).forEach(x=>x.classList.toggle('active',x.dataset.phase===tab.dataset.phase))}));
 
+  // Continue only after all quiz groups in the current phase are complete.
+  function updatePhaseNext(phase){
+    if(!phase)return;
+    const completed=$$('.answer-grid',phase).every(grid=>$('.answer.correct',grid));
+    $$('[data-phase-next]',phase).forEach(button=>{button.disabled=!completed});
+  }
+  $$('[data-phase-next]').forEach(button=>button.addEventListener('click',()=>{
+    if(button.disabled)return;
+    const root=button.closest('[data-phase-root]')||document;
+    const tab=$$('.phase-tab',root).find(tab=>tab.dataset.phase===button.dataset.phaseNext);
+    if(!tab)return;
+    tab.click();
+    tab.focus({preventScroll:true});
+    const tabs=$('.phase-tabs',root);
+    if(tabs){
+      tabs.style.scrollMarginTop=`${($('.navbar')?.offsetHeight||72)+18}px`;
+      tabs.scrollIntoView({block:'start'});
+    }
+  }));
+
   // lesson answers and error logging
-  $$('.answer[data-correct]').forEach(btn=>btn.addEventListener('click',()=>{const correct=btn.dataset.correct==='true';btn.classList.add(correct?'correct':'wrong');const fb=btn.closest('.study-block')?.querySelector('.quiz-feedback');if(fb)fb.textContent=correct?'正解です。次は自分の文で使ってみましょう。':'もう一度考えてみましょう。過去を表す「昨日」に注目してください。';if(!correct)addError(btn.dataset.error||'過去形','文法')}));
+  $$('.answer[data-correct]').forEach(btn=>btn.addEventListener('click',()=>{const correct=btn.dataset.correct==='true';btn.classList.add(correct?'correct':'wrong');const fb=btn.closest('.study-block')?.querySelector('.quiz-feedback');if(fb)fb.textContent=correct?'正解です。次は自分の文で使ってみましょう。':'もう一度考えてみましょう。過去を表す「昨日」に注目してください。';if(!correct)addError(btn.dataset.error||'過去形','文法');updatePhaseNext(btn.closest('.phase'))}));
   function addError(key,type='文法'){const arr=load(STORE.errors,[]);const f=arr.find(x=>x.key===key);if(f)f.count++;else arr.push({key,count:1,type});save(STORE.errors,arr)}
 
   // free production check

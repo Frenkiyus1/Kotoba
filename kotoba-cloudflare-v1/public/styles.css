@@ -101,17 +101,6 @@
   font-size: 13px;
 }
 
-.auth-demo-card {
-  margin-top: 18px;
-  padding: 12px;
-  background: #fffaf1;
-}
-
-.auth-demo-text {
-  margin-top: 4px;
-  font-size: 12px;
-}
-
 @media (max-width: 860px) {
   .auth-visual--start {
     min-height: 320px;

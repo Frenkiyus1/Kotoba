@@ -58,6 +58,7 @@
   const languageKey=`kotoba.uiLanguage.${load(STORE.user,{}).id||'guest'}`;
   window.KOTOBA_UI_LANGUAGE=(!serverPrefs||['N5','N4'].includes(serverPrefs.level))?(localStorage.getItem(languageKey)||'vi'):'ja';
   const uiScript=document.createElement('script');uiScript.src='ui-language.js';document.head.appendChild(uiScript);
+  if(['lesson','biology-lesson','review','personalized','conversation','profile'].includes(document.body.dataset.page)){const script=document.createElement('script');script.type='module';script.src='furigana.js';document.head.appendChild(script)}
   applyLanguageMode();
   ensureSeed();
 
@@ -305,7 +306,7 @@ function initDictionary() {
     }
 
     const text =
-      norm(selection.toString());
+      norm(window.KotobaFurigana?.baseText(selection.getRangeAt(0).cloneContents()) ?? selection.toString());
 
     // Chỉ xử lý text có tiếng Nhật.
     if (
@@ -347,7 +348,7 @@ function initDictionary() {
 
     return {
       text: text.slice(0, 180),
-      context: norm(context.textContent).slice(0, 900),
+      context: norm(window.KotobaFurigana?.baseText(context) ?? context.textContent).slice(0, 900),
       rect,
       node: context
     };
@@ -1021,7 +1022,7 @@ function initDictionary() {
   function positionPanel(p,r){const w=Math.min(440,innerWidth-24);p.style.width=w+'px';let left=r?.left||16,top=(r?.bottom||80)+12;left=Math.max(12,Math.min(left,innerWidth-w-12));if(top+590>innerHeight)top=Math.max(12,(r?.top||450)-470);p.style.left=left+'px';p.style.top=top+'px'}
   async function resolveEntry(sel,ctx,q){if(window.KOTOBA_DICTIONARY_ENDPOINT){try{const res=await fetch(window.KOTOBA_DICTIONARY_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({selection:sel,context:ctx,question:q})});if(res.ok)return await res.json()}catch(e){}}
     const exact=window.KOTOBA_PHRASES?.[sel]||window.KOTOBA_DICTIONARY?.[sel];if(exact)return Object.assign({term:sel},exact);const keys=Object.keys(window.KOTOBA_DICTIONARY||{}).filter(k=>sel.includes(k)).sort((a,b)=>b.length-a.length);if(keys.length)return Object.assign({term:keys[0]},window.KOTOBA_DICTIONARY[keys[0]]);return null}
-  function renderEntry(entry,selected){const r=$('#dictResult');const ex=(entry.examples||[]).map(x=>`<div class="dict-example"><div>${x.jp}</div><div class="vi">${x.vi}</div></div>`).join('');r.innerHTML=`<h3 class="dictionary-entry-title jp">${entry.term||selected}</h3><div class="dictionary-reading">${entry.reading||''} ・ ${entry.pos||''}</div><div class="dict-section"><h4>この文での意味</h4><strong>${supportsVietnamese()?(entry.meaningVi||entry.usage||''):(entry.meaningJa||entry.usage||'例文で使い方を確認してください。')}</strong></div>${supportsVietnamese()&&entry.otherMeanings?.length?`<div class="dict-section"><h4>ほかの意味</h4>${entry.otherMeanings.map(x=>`<div>・${x}</div>`).join('')}</div>`:''}<div class="dict-section"><h4>使い方</h4><div>${entry.usage||''}</div></div><div class="dict-section"><h4>文法・よく使う形</h4><div class="dict-tags">${(entry.grammar||[]).map(x=>`<span class="dict-tag">${x}</span>`).join('')}</div></div>${entry.kanji?.length?`<div class="dict-section"><h4>漢字</h4>${entry.kanji.map(x=>`<div>・${x}</div>`).join('')}</div>`:''}<div class="dict-section"><h4>例文</h4>${ex}</div><div class="dict-section"><h4>関連語</h4><div class="dict-tags">${(entry.related||[]).map(x=>`<span class="dict-tag">${x}</span>`).join('')}</div></div><div class="dict-added">「今日の単語」に自動で追加しました。</div>`;addToDeck(entry,selected)}
+  function renderEntry(entry,selected){const r=$('#dictResult');const ex=(entry.examples||[]).map(x=>`<div class="dict-example"><div>${x.jp}</div><div class="vi">${x.vi}</div></div>`).join('');r.innerHTML=`<h3 class="dictionary-entry-title jp" data-reading="${escapeHtml(entry.reading)}">${escapeHtml(entry.term||selected)}</h3><div class="dictionary-reading">${entry.reading||''} ・ ${entry.pos||''}</div><div class="dict-section"><h4>この文での意味</h4><strong>${supportsVietnamese()?(entry.meaningVi||entry.usage||''):(entry.meaningJa||entry.usage||'例文で使い方を確認してください。')}</strong></div>${supportsVietnamese()&&entry.otherMeanings?.length?`<div class="dict-section"><h4>ほかの意味</h4>${entry.otherMeanings.map(x=>`<div>・${x}</div>`).join('')}</div>`:''}<div class="dict-section"><h4>使い方</h4><div data-furigana-content>${escapeHtml(entry.usage)}</div></div><div class="dict-section"><h4>文法・よく使う形</h4><div class="dict-tags">${(entry.grammar||[]).map(x=>`<span class="dict-tag">${x}</span>`).join('')}</div></div>${entry.kanji?.length?`<div class="dict-section"><h4>漢字</h4>${entry.kanji.map(x=>`<div>・${x}</div>`).join('')}</div>`:''}<div class="dict-section"><h4>例文</h4>${ex}</div><div class="dict-section"><h4>関連語</h4><div class="dict-tags">${(entry.related||[]).map(x=>`<span class="dict-tag">${x}</span>`).join('')}</div></div><div class="dict-added">「今日の単語」に自動で追加しました。</div>`;addToDeck(entry,selected)}
   function addToDeck(entry,selected){if(entry.pos==='文')return;const term=entry.term||selected;if(!term||term.length>25)return;const deck=load(STORE.deck,[]);const found=deck.find(c=>c.term===term);if(found){found.lastSeen=todayKey();found.exposures=(found.exposures||1)+1}else deck.push({term,reading:entry.reading,meaning:entry.meaningVi,example:entry.examples?.[0]?.jp||selected,source:document.body.dataset.track==='biology'?'生物':'辞書',stage:0,interval:0,due:todayKey(),reviews:0,exposures:1,lastSeen:todayKey()});save(STORE.deck,deck);toast(`「${term}」を今日の単語に追加しました。`)}
 
   // review page
@@ -1157,11 +1158,11 @@ function initDictionary() {
       if(c.stage===2&&c.example?.includes(c.term)){
         front=`<div class="flash-prompt">文脈から思い出してください</div><div class="context-example jp">${escapeHtml(c.example.replace(c.term,'＿＿＿'))}</div>`;
       }else if(c.stage===3&&c.example){
-        front=`<div class="flash-prompt">この語を使って、自分の文を一つ考えてください</div><div class="flash-front-main jp">${term}</div>`;
+        front=`<div class="flash-prompt">この語を使って、自分の文を一つ考えてください</div><div class="flash-front-main jp" data-reading="${reading}">${term}</div>`;
       }else{
-        front=`<div class="flash-prompt">意味を思い出してください</div><div class="flash-front-main jp">${term}</div>`;
+        front=`<div class="flash-prompt">意味を思い出してください</div><div class="flash-front-main jp" data-reading="${reading}">${term}</div>`;
       }
-      const back=`<h2 class="jp">${term}</h2><div data-learning-content>${reading}</div><p class="flash-meaning-label">ベトナム語の意味</p><h3 class="flash-meaning" lang="vi" data-flashcard-vietnamese data-learning-content>${meaning}</h3>${example?`<div class="context-example jp">${example}</div>`:''}`;
+      const back=`<h2 class="jp" data-reading="${reading}">${term}</h2><div data-learning-content>${reading}</div><p class="flash-meaning-label">ベトナム語の意味</p><h3 class="flash-meaning" lang="vi" data-flashcard-vietnamese data-learning-content>${meaning}</h3>${example?`<div class="context-example jp">${example}</div>`:''}`;
       card.innerHTML=`<span class="source-badge">${escapeHtml(cardSource(c))}</span><div class="flash-front" id="flashFront" aria-hidden="false">${front}<p class="muted flash-hint">カードを押すと裏返せます。</p></div><div class="flash-back" id="flashBack" aria-hidden="true">${back}</div>`;
       setFlipped(false);
     };
@@ -1222,7 +1223,7 @@ function initDictionary() {
     });
     render();
   }
-  function renderDeckList(deck){const el=$('#deckList');if(!el)return;el.innerHTML=deck.slice().reverse().map(c=>`<div class="deck-item"><div><b class="jp">${escapeHtml(c.term)}</b><div class="muted" style="font-size:12px">${escapeHtml(cardSource(c))}</div></div><span>${c.due<=todayKey()?'今日':'予定'}</span></div>`).join('')}
+  function renderDeckList(deck){const el=$('#deckList');if(!el)return;el.innerHTML=deck.slice().reverse().map(c=>`<div class="deck-item"><div><b class="jp" data-reading="${escapeHtml(c.reading)}">${escapeHtml(c.term)}</b><div class="muted" style="font-size:12px">${escapeHtml(cardSource(c))}</div></div><span>${c.due<=todayKey()?'今日':'予定'}</span></div>`).join('')}
 
   // conversation
   if(document.body.dataset.page==='conversation')initConversation();
@@ -1393,7 +1394,7 @@ function initDictionary() {
       u.name=$('#profileName').value.trim()||u.name;
       const prefs={...serverPrefs,level:$('#profileLevel').value,minutes:$('#profileMinutes').value,studyTime:$('#profileTime').value};
       await api('/state/user',{method:'PUT',body:JSON.stringify({value:u})});
-      await persistPrefs(prefs);toast('保存しました。');
+      await persistPrefs(prefs);window.KotobaFurigana?.setMode($('#profileFurigana').value);toast('保存しました。');
     }catch(ex){toast(ex.message||'保存できませんでした。')}finally{button.disabled=false}};
   }
 

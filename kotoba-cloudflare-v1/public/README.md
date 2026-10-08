@@ -63,3 +63,9 @@ Prototype state is stored in browser `localStorage`:
 - basic progress
 
 No production authentication or database is included.
+
+## Furigana
+
+Lessons, dictionary results, review cards, personal exercises and chat bubbles use native HTML ruby annotations. The Furigana button toggles readings; profile settings also support revealing them on hover, tap or keyboard focus. The choice is stored per account in this browser. Copying and dictionary selection retain the original text without the reading annotations.
+
+Readings come from `dictionary-data.js`, the learner's deck and the supplemental lesson vocabulary in `furigana.js`. Kanji compounds and okurigana are aligned to supplied kana; unknown words and ambiguous alignments stay unchanged. A custom card's Reading field supplies its furigana. No external pronunciation service is called.

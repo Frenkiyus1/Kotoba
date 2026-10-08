@@ -389,7 +389,7 @@ function translate(root){
  if(language!=='vi'||!root)return;
  const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let node;
  while((node=walker.nextNode())){
-  if(node.parentElement?.closest('script,style,textarea,#chatLog,.context-example,.model-sentence,.reading-surface,.exercise-question,.answer,.flash-front-main,.flash-back h2,.dictionary-entry-title,.dictionary-reading,.dict-example,.dict-tag,.label-pill,.deck-item b,#dictSel,#personalExercise,[data-learning-content]'))continue;
+  if(node.parentElement?.closest('script,style,textarea,ruby,[data-no-translate],.teacher-message b,#chatLog,.context-example,.model-sentence,.reading-surface,.exercise-question,.answer,.flash-front-main,.flash-back h2,.dictionary-entry-title,.dictionary-reading,.dict-example,.dict-tag,.label-pill,.deck-item b,#dictSel,#personalExercise,[data-learning-content]'))continue;
   const text=node.textContent.trim();const value=translatedText(text);if(value!==text){node.textContent=node.textContent.replace(text,value);node.parentElement?.setAttribute?.('data-ui-translated','true')}
  }
  root.querySelectorAll?.('[placeholder],[title],[aria-label],[alt]').forEach(el=>{for(const attr of ['placeholder','title','aria-label','alt']){const value=el.getAttribute(attr);if(value){const translated=translatedText(value);if(translated!==value)el.setAttribute(attr,translated)}}});

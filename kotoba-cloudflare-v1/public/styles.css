@@ -420,3 +420,16 @@ button.error-chip:focus-visible{outline:2px solid #4b6751;outline-offset:2px}
 .personal-actions button:disabled{opacity:.5;cursor:not-allowed}
 #personalExercise .answer:disabled{cursor:default}
 #personalProgress{margin:10px 0}
+/* Furigana stays above the original Japanese text. */
+ruby.furigana{ruby-position:over;ruby-align:center;letter-spacing:normal;line-height:2.1}
+ruby.furigana rt{font-family:"Yu Gothic","Meiryo",sans-serif;font-size:max(10px,.5em);font-weight:500;line-height:1.2;color:var(--muted);user-select:none}
+body[data-furigana="hide"] ruby.furigana rt{display:none}
+body[data-furigana="on-demand"] ruby.furigana rt{visibility:hidden}
+body[data-furigana="on-demand"] ruby.furigana:is(:hover,:focus,:focus-within) rt{visibility:visible}
+ruby.furigana:focus-visible{outline:2px solid var(--vermilion);outline-offset:3px;border-radius:3px}
+body[data-furigana="hide"] ruby.furigana{line-height:inherit}
+.furigana-controls{display:flex;align-items:center;gap:8px;margin-top:12px}
+.furigana-toggle{white-space:nowrap;font-family:inherit;letter-spacing:normal}
+.review-heading,.chat-head{flex-wrap:wrap;gap:12px}
+.review-heading .furigana-controls,.chat-head .furigana-controls{margin-top:0}
+.label-pill:has(ruby.furigana){line-height:2.1}

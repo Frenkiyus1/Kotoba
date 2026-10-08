@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="820" height="720" viewBox="0 0 820 720" fill="none">
+  <defs>
+    <radialGradient id="petal-color" cx="50%" cy="82%" r="86%">
+      <stop stop-color="#d879a1"/>
+      <stop offset="0.55" stop-color="#e9a3bf"/>
+      <stop offset="1" stop-color="#f7cbdc"/>
+    </radialGradient>
+    <path id="petal" d="M0 2C-12-5-17-18-10-26C-6-30-2-27 0-24C2-27 6-30 10-26C17-18 12-5 0 2Z" fill="url(#petal-color)"/>
+    <g id="blossom">
+      <use href="#petal"/>
+      <use href="#petal" transform="rotate(72)"/>
+      <use href="#petal" transform="rotate(144)"/>
+      <use href="#petal" transform="rotate(216)"/>
+      <use href="#petal" transform="rotate(288)"/>
+      <g stroke="#bc668c" stroke-width="0.9" stroke-linecap="round">
+        <path d="M0 0L0-10M0 0L9-3M0 0L6 8M0 0L-6 8M0 0L-9-3"/>
+      </g>
+      <g fill="#c789a1">
+        <circle cy="-10" r="1.4"/><circle cx="9" cy="-3" r="1.4"/>
+        <circle cx="6" cy="8" r="1.4"/><circle cx="-6" cy="8" r="1.4"/>
+        <circle cx="-9" cy="-3" r="1.4"/>
+      </g>
+      <circle r="3" fill="#bb698c"/>
+    </g>
+    <g id="bud">
+      <path d="M0 9C-3 2-9-5-4-11C-1-15 5-11 6-7C9-1 3 5 0 9Z" fill="#d994b2"/>
+      <path d="M0 9L-3 4M0 9L4 4" stroke="#a78390" stroke-width="1.3" stroke-linecap="round"/>
+    </g>
+  </defs>
+  <g stroke="#a07889" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M842 24C755 70 717 128 654 177C590 228 535 253 478 307C433 350 404 397 363 436" stroke-width="9"/>
+    <path d="M737 100C664 115 603 108 546 144C499 174 455 204 403 210" stroke-width="5"/>
+    <path d="M654 177C650 242 617 284 589 333C570 367 572 396 548 426" stroke-width="5"/>
+    <path d="M542 255C489 264 434 251 392 276C359 296 328 306 291 308" stroke-width="3.5"/>
+    <path d="M474 312C463 352 483 388 460 423C446 444 421 455 411 485" stroke-width="3"/>
+    <path d="M598 117C571 92 550 70 509 69" stroke-width="3"/>
+    <path d="M541 148C516 148 490 136 471 118" stroke-width="2"/>
+    <path d="M452 195C424 181 414 157 387 148" stroke-width="2.5"/>
+    <path d="M642 241C677 258 687 282 694 310" stroke-width="2.7"/>
+    <path d="M597 320C628 335 637 356 647 376" stroke-width="2.5"/>
+    <path d="M576 378C548 361 527 360 508 345" stroke-width="2"/>
+    <path d="M393 276C381 251 360 238 338 237" stroke-width="2.3"/>
+    <path d="M438 355C402 351 376 365 352 378" stroke-width="2.5"/>
+    <path d="M370 428C339 419 312 423 291 445" stroke-width="2"/>
+    <path d="M461 421C489 431 502 448 508 470" stroke-width="2"/>
+  </g>
+  <g>
+    <use href="#blossom" transform="translate(509 69) rotate(18) scale(.78)"/>
+    <use href="#blossom" transform="translate(535 77) rotate(-16) scale(.64)"/>
+    <use href="#blossom" transform="translate(471 118) rotate(28) scale(.76)"/>
+    <use href="#blossom" transform="translate(551 143) rotate(9) scale(.9)"/>
+    <use href="#blossom" transform="translate(387 148) rotate(-12) scale(.68)"/>
+    <use href="#blossom" transform="translate(402 210) rotate(30) scale(.9)"/>
+    <use href="#blossom" transform="translate(430 201) rotate(-12) scale(.72)"/>
+    <use href="#blossom" transform="translate(657 180) rotate(22) scale(.88)"/>
+    <use href="#blossom" transform="translate(694 310) rotate(-20) scale(.84)"/>
+    <use href="#blossom" transform="translate(681 285) rotate(14) scale(.6)"/>
+    <use href="#blossom" transform="translate(338 237) rotate(17) scale(.66)"/>
+    <use href="#blossom" transform="translate(291 308) rotate(-15) scale(.86)"/>
+    <use href="#blossom" transform="translate(320 306) rotate(23) scale(.65)"/>
+    <use href="#blossom" transform="translate(393 276) rotate(-8) scale(.78)"/>
+    <use href="#blossom" transform="translate(647 376) rotate(18) scale(.7)"/>
+    <use href="#blossom" transform="translate(508 345) rotate(-24) scale(.65)"/>
+    <use href="#blossom" transform="translate(548 426) rotate(10) scale(.9)"/>
+    <use href="#blossom" transform="translate(567 408) rotate(-30) scale(.62)"/>
+    <use href="#blossom" transform="translate(352 378) rotate(22) scale(.74)"/>
+    <use href="#blossom" transform="translate(365 436) rotate(-14) scale(.86)"/>
+    <use href="#blossom" transform="translate(291 445) rotate(12) scale(.65)"/>
+    <use href="#blossom" transform="translate(411 485) rotate(-10) scale(.82)"/>
+    <use href="#blossom" transform="translate(508 470) rotate(25) scale(.7)"/>
+    <use href="#bud" transform="translate(490 51) rotate(-30)"/>
+    <use href="#bud" transform="translate(372 128) rotate(-20)"/>
+    <use href="#bud" transform="translate(277 294) rotate(-65)"/>
+    <use href="#bud" transform="translate(710 321) rotate(155)"/>
+    <use href="#bud" transform="translate(634 397) rotate(150)"/>
+    <use href="#bud" transform="translate(533 441) rotate(150)"/>
+    <use href="#bud" transform="translate(280 465) rotate(-140)"/>
+    <use href="#bud" transform="translate(398 505) rotate(-140)"/>
+  </g>
+  <g fill="#dda8bf" opacity=".7">
+    <path d="M252 354C239 340 245 333 253 337C260 344 257 350 252 354Z"/>
+    <path d="M448 544C435 530 441 523 449 527C456 534 453 540 448 544Z"/>
+    <path d="M606 483C593 469 599 462 607 466C614 473 611 479 606 483Z"/>
+  </g>
+</svg>

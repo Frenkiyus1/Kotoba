@@ -43,29 +43,80 @@
    Tách riêng để việc đổi ảnh đăng nhập không ảnh hưởng homepage.
    ============================================================ */
 
-/* Ảnh user chọn cho màn hình login/register. */
-.auth-visual--start {
-  background:
-    linear-gradient(
-      180deg,
-      rgba(31, 31, 29, 0.08) 0%,
-      rgba(31, 31, 29, 0.18) 48%,
-      rgba(31, 31, 29, 0.50) 100%
-    ),
-    url('assets/start-bg.jpg') center center / cover no-repeat;
+/* Soft sakura colors are scoped to the login/register page. */
+body.auth-sakura {
+  --washi: #fcedf2;
+  --paper: #fff9fb;
+  --border: #e7ccd7;
+  --muted: #78616b;
+  --vermilion: #b73e65;
+  --vermilion-dark: #9d3054;
 }
 
-/* Logo trên nền ảnh luôn nằm trên overlay. */
+.auth-sakura .auth-page {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: linear-gradient(135deg, #f7dce6 0%, #fbe8ee 44%, #fff4f7 100%);
+}
+
+/* Decorative branches stay behind the form and never intercept clicks. */
+.auth-sakura .auth-page::before,
+.auth-sakura .auth-page::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: min(680px, 65vw);
+  aspect-ratio: 820 / 720;
+  background: url('assets/sakura-branch.svg') center / contain no-repeat;
+  pointer-events: none;
+  filter: blur(0.5px);
+}
+
+.auth-sakura .auth-page::before {
+  top: -70px;
+  right: -45px;
+  opacity: 0.24;
+}
+
+.auth-sakura .auth-page::after {
+  bottom: -130px;
+  left: -100px;
+  opacity: 0.20;
+  transform: rotate(180deg);
+}
+
+.auth-sakura .auth-panel {
+  background: rgba(255, 249, 251, 0.38);
+}
+
+.auth-sakura .auth-tabs {
+  background: #f2dde6;
+}
+
+.auth-sakura .auth-tabs button.active {
+  background: #fff9fb;
+}
+
+.auth-sakura .field input {
+  background: rgba(255, 252, 253, 0.92);
+}
+
+.auth-visual--start {
+  background: transparent;
+}
+
+/* Brand in the upper corner of the sakura background. */
 .auth-brand-on-image {
   position: absolute;
   top: 26px;
   left: 34px;
   z-index: 3;
-  color: #fff;
+  color: #714759;
 }
 
 .auth-eyebrow-light {
-  color: #fff;
+  color: #956277;
 }
 
 /* Giữ copy ở dưới ảnh, tránh lỗi đè lên logo. */
@@ -77,8 +128,8 @@
   top: auto;
   z-index: 2;
   max-width: 520px;
-  color: #fff;
-  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.28);
+  color: #714759;
+  text-shadow: none;
 }
 
 .auth-visual--start .auth-visual-copy h1 {
@@ -99,6 +150,24 @@
   margin-top: 12px;
   color: #b23a2d;
   font-size: 13px;
+}
+
+@media (max-width: 760px) {
+  .auth-sakura .auth-page::before,
+  .auth-sakura .auth-page::after {
+    width: 370px;
+    opacity: 0.16;
+  }
+
+  .auth-sakura .auth-page::before {
+    top: -55px;
+    right: -120px;
+  }
+
+  .auth-sakura .auth-page::after {
+    bottom: -115px;
+    left: -100px;
+  }
 }
 
 @media (max-width: 860px) {

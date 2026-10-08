@@ -129,6 +129,7 @@ async function frontend(page, prefs, extra = {}) {
     return extra.fetch(url, opts);
   };
   const context = { document, window: extra.window || {}, location, localStorage: { getItem: k => storage.get(k) ?? null, setItem: (k, v) => storage.set(k, v), removeItem: k => storage.delete(k) }, fetch, setTimeout, clearTimeout, AbortController, console };
+  vm.runInNewContext(readFileSync(new URL('../public/speech.js', import.meta.url), 'utf8'), context);
   await vm.runInNewContext(readFileSync(new URL('../public/app.js', import.meta.url), 'utf8'), context);
   return { elements, scenarios, location, state, body, storage, context };
 }
@@ -217,6 +218,7 @@ test('final microphone transcript sends chat automatically and reads AI reply', 
   await pending;
   assert.equal(request.text,'お茶ください。');
   assert.equal(spoken.text,'はい、どうぞ。');
+  spoken.onend();
   recognition.onend();
   assert.equal(page.elements['#conversationMic'].textContent,'');
   assert.equal(page.elements['#conversationMic'].classes.has('listening'),false);
@@ -766,4 +768,153 @@ test('an account with no weaknesses shows an empty state instead of a fabricated
   assert.ok(page.elements['#personalNext'].classes.has('hidden'));
   assert.ok(page.elements['#personalRestart'].classes.has('hidden'));
   assert.equal(page.elements['#personalProgress'].textContent, 'Đã luyện: 0 / 0');
+});
+
+// Extend the minimal DOM with the direction controls before remounting the app.
+// The application reads the same API state and persisted browser preferences.
+async function reviewDirectionPage(prefs, extra = {}) {
+  const page = await frontend('review', prefs, extra);
+  for (const id of ['reviewDirectionTitle','reviewDirectionHint','directionJaVi','directionViJa']) {
+    page.elements[`#${id}`] = new Element();
+  }
+  page.elements['#directionJaVi'].dataset.reviewDirection = 'ja-vi';
+  page.elements['#directionViJa'].dataset.reviewDirection = 'vi-ja';
+  await vm.runInNewContext(readFileSync(new URL('../public/app.js', import.meta.url), 'utf8'), page.context);
+  return page;
+}
+const flashFrontHtml = card => card.innerHTML.split('<div class="flash-front"')[1]?.split('<div class="flash-back"')[0] || '';
+
+test('Vietnamese-to-Japanese flashcards hide Japanese answers until flip in both interface languages and every SRS stage', async () => {
+  for (const level of ['N5','N3']) {
+    for (const stage of [0,1,2,3]) {
+      const prefs = {level,onboardingCompleted:true};
+      const cardData = {term:'図書館',reading:'としょかん',meaning:'thư viện <img src=x>',example:'図書館で本を読みます。',source:'手入力',stage,due:'2000-01-01',reviews:2};
+      const page = await reviewDirectionPage(prefs, {state:{user:{id:42},deck:[cardData]}});
+      const el = page.elements, card = el['#flashcard'];
+      const before = JSON.stringify(page.state.deck);
+      el['#revealCard'].onclick();
+      assert.ok(card.classes.has('flipped'));
+      el['#directionViJa'].listeners.click();
+      assert.equal(card.dataset.direction,'vi-ja');
+      assert.equal(card.classes.has('flipped'),false);
+      assert.equal(el['#directionViJa'].getAttribute('aria-pressed'),'true');
+      assert.equal(el['#directionJaVi'].getAttribute('aria-pressed'),'false');
+      assert.equal(el['#reviewPosition'].textContent,'1 / 1');
+      assert.equal(JSON.stringify(page.state.deck),before);
+      const front = flashFrontHtml(card);
+      assert.match(front,/thư viện &lt;img src=x&gt;/);
+      for (const answer of [cardData.term,cardData.reading,cardData.example]) assert.ok(!front.includes(answer));
+      assert.ok(!el['#deckList'].innerHTML.includes(cardData.term));
+      assert.match(el['#deckList'].innerHTML,/thư viện/);
+      assert.match(card.innerHTML,/data-reading="としょかん"/);
+      assert.match(card.innerHTML,/図書館で本を読みます。/);
+      assert.match(card.getAttribute('aria-label'),level==='N5'?/từ tiếng Nhật/:/日本語/);
+      card.listeners.keydown({target:card,key:' ',repeat:false,preventDefault(){}});
+      assert.ok(card.classes.has('flipped'));
+      assert.equal(el['#flashBack'].getAttribute('aria-hidden'),'false');
+      card.listeners.keydown({target:card,key:'Enter',repeat:false,preventDefault(){}});
+      assert.equal(card.classes.has('flipped'),false);
+      el['#directionJaVi'].listeners.click();
+      assert.equal(card.dataset.direction,'ja-vi');
+      assert.match(el['#deckList'].innerHTML,/図書館/);
+      assert.equal(JSON.stringify(page.state.deck),before);
+      assert.match(el['#reviewDirectionTitle'].textContent,level==='N5'?/Chiều học/:/カード/);
+    }
+  }
+});
+
+test('flashcard direction persists per account independently of topic and invalid preferences use the original mode', async () => {
+  const prefs={level:'N4',onboardingCompleted:true};
+  const state={user:{id:42},deck:[{term:'駅',meaning:'nhà ga',reading:'えき',source:'旅行',stage:0,due:'2000-01-01'},{term:'本',meaning:'sách',source:'学校',stage:0,due:'2000-01-01'}],flashcardTopics:[{id:'学校',labelVi:'Trường học',terms:['本']},{id:'旅行',labelVi:'Du lịch',terms:['駅']}]};
+  const page=await reviewDirectionPage(prefs,{state});
+  page.elements['#reviewTopics'].children.find(button=>button.dataset.reviewTopic==='旅行').onclick();
+  page.elements['#directionViJa'].listeners.click();
+  assert.equal(page.storage.get('kotoba.reviewDirection.42'),'"vi-ja"');
+  assert.equal(page.storage.get('kotoba.reviewTopic.42'),'"旅行"');
+  const storage=Object.fromEntries(page.storage);
+  const reload=await reviewDirectionPage(prefs,{state,storage});
+  assert.equal(reload.elements['#flashcard'].dataset.direction,'vi-ja');
+  assert.equal(reload.elements['#flashcard'].dataset.term,'駅');
+  assert.match(flashFrontHtml(reload.elements['#flashcard']),/nhà ga/);
+  const other=await reviewDirectionPage(prefs,{state:{...state,user:{id:43}},storage});
+  assert.equal(other.elements['#flashcard'].dataset.direction,'ja-vi');
+  assert.equal(other.elements['#flashcard'].dataset.term,'本');
+  const invalid=await reviewDirectionPage(prefs,{state,storage:{'kotoba.reviewDirection.42':'"bad"'}});
+  assert.equal(invalid.elements['#flashcard'].dataset.direction,'ja-vi');
+});
+
+test('changing flashcard direction preserves queue position and sends the same SRS review contract', async () => {
+  const env=environment();
+  try {
+    const {token}=await account(env,'direction@example.com');
+    env.db.exec('UPDATE preferences SET onboarding_completed = 1');
+    const state=await (await call(env,'/state',undefined,token,'GET')).json();
+    const requests=[];
+    const fetch=async (url,opts)=>{
+      const body=JSON.parse(opts.body);
+      requests.push(body);
+      return call(env,url.slice('/api'.length),body,token,opts.method);
+    };
+    const page=await reviewDirectionPage(state.prefs,{state,fetch});
+    const el=page.elements,first=el['#flashcard'].dataset.term;
+    el['#directionViJa'].listeners.click();
+    el['#revealCard'].onclick();
+    await el['#rateGood'].onclick();
+    assert.deepEqual(requests[0],{term:first,rating:'good'});
+    assert.equal(el['#reviewPosition'].textContent,'2 / 30');
+    const second=el['#flashcard'].dataset.term;
+    assert.notEqual(second,first);
+    assert.equal(el['#flashcard'].classes.has('flipped'),false);
+    el['#directionJaVi'].listeners.click();
+    assert.equal(el['#flashcard'].dataset.term,second);
+    assert.equal(el['#reviewPosition'].textContent,'2 / 30');
+    const fresh=await (await call(env,'/state',undefined,token,'GET')).json();
+    const reviewed=fresh.deck.find(card=>card.term===first);
+    assert.equal(reviewed.reviews,1);
+    assert.equal(reviewed.stage,1);
+    assert.equal(fresh.deck.find(card=>card.term===second).reviews,0);
+  }finally{env.db.close()}
+});
+
+test('direction controls stay disabled during review save and a failed save keeps the flipped card and direction', async () => {
+  let resolve;
+  const prefs={level:'N5',onboardingCompleted:true};
+  const page=await reviewDirectionPage(prefs,{state:{deck:[{term:'学校',meaning:'trường học',stage:1,due:'2000-01-01'}]},fetch:()=>new Promise(done=>{resolve=done})});
+  const el=page.elements;
+  el['#directionViJa'].listeners.click();
+  el['#revealCard'].onclick();
+  const pending=el['#rateGood'].onclick();
+  assert.equal(el['#directionJaVi'].disabled,true);
+  assert.equal(el['#directionViJa'].disabled,true);
+  el['#directionJaVi'].listeners.click();
+  assert.equal(el['#flashcard'].dataset.direction,'vi-ja');
+  resolve(Response.json({detail:'Try again'},{status:503}));
+  await pending;
+  assert.equal(el['#directionJaVi'].disabled,false);
+  assert.equal(el['#flashcard'].dataset.term,'学校');
+  assert.equal(el['#flashcard'].classes.has('flipped'),true);
+  assert.equal(el['#reviewPosition'].textContent,'1 / 1');
+  assert.ok(!el['#reviewError'].classes.has('hidden'));
+});
+
+
+test('N5 AI conversation uses simple kana guidance while higher levels keep their own level', async () => {
+  const env=environment();
+  try{
+    const learner=await account(env,'simple-kana@example.com');let prompt;
+    env.AI={run:async(_model,input)=>{prompt=input.messages[0].content;return {response:'学校はどうですか？'}}};
+    let response=await call(env,'/ai/conversation',{scenario:'学校',text:'学校です。'},learner.token);
+    assert.equal(response.status,200);assert.match(prompt,/ひらがなを多く/);assert.match(prompt,/一つの質問/);
+    response=await call(env,'/state/prefs',{value:{...learner.state.prefs,level:'N3',onboardingCompleted:true}},learner.token,'PUT');assert.equal(response.status,200);
+    response=await call(env,'/ai/conversation',{scenario:'学校',text:'学校です。'},learner.token);
+    assert.equal(response.status,200);assert.match(prompt,/JLPT N3/);assert.doesNotMatch(prompt,/ひらがなを多く/);
+  }finally{env.db.close()}
+});
+
+test('dictionary resolves a supplied kana reading so simpler N5 text stays searchable', async () => {
+  const env=environment();
+  try{
+    const response=await call(env,'/dictionary',{selection:'がっこう',context:'学校へ行きます。',question:'意味は何ですか。'});
+    assert.equal(response.status,200);const entry=await response.json();assert.equal(entry.term,'学校');assert.equal(entry.reading,'がっこう');
+  }finally{env.db.close()}
 });

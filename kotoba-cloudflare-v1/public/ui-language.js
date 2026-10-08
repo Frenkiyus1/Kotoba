@@ -2,6 +2,51 @@
 'use strict';
 const language=window.KOTOBA_UI_LANGUAGE||'ja';
 const labels={
+  "わからないことばを選んで、「選んだことばを調べる」を押してください。パソコンでは右クリックからも辞書を開けます。": "Chọn từ chưa hiểu, rồi bấm Tra từ đã chọn. Trên máy tính, bạn cũng có thể nhấn chuột phải để mở từ điển.",
+  "返事を聞く": "Nghe câu trả lời",
+  "マイク": "Micro",
+  "辞書": "Từ điển",
+  "意味か読み方を調べましょう。": "Bạn muốn biết nghĩa hay cách đọc?",
+  "ボタンを選ぶか、質問を入力してください。マイクも使えます。": "Bấm Nghĩa hoặc Cách đọc để tra từ. Bạn cũng có thể nhập câu hỏi hoặc dùng micro.",
+  "意味を調べる": "Nghĩa",
+  "読み方を調べる": "Cách đọc",
+  "日本語で質問する（任意）": "Nhập câu hỏi tiếng Nhật (không bắt buộc)",
+  "例：このことばの意味は何ですか。": "Ví dụ: このことばの意味は何ですか。",
+  "辞書を開く": "Tra từ",
+  "マイクで質問する": "Hỏi bằng micro",
+  "守 Shu：文を読む": "Shu: Đọc câu mẫu",
+  "破 Ha：文を作る": "Ha: Luyện đặt câu",
+  "離 Ri：自分の文を書く": "Ri: Viết câu của bạn",
+  "学校の一日を話そう": "Kể về một ngày ở trường",
+  "昨日したことを、日本語で一つ話しましょう。": "Mục tiêu: Nói một việc bạn đã làm hôm qua bằng tiếng Nhật.",
+  "守 Shu ・ まず文を読む": "Shu: Làm quen với câu mẫu",
+  "1. 文を読んで、音を聞きましょう。": "1. Đọc câu mẫu, rồi bấm Nghe để nghe cách đọc.",
+  "2. 「昨日」のことを話す文を一つ選びましょう。": "2. Chọn một câu đúng để kể việc đã xảy ra hôm qua.",
+  "破 Ha ・ ことばを変える": "Ha: Thay từ trong câu mẫu",
+  "1. 空いているところに入ることばを一つ選びましょう。": "1. Chọn một từ để điền vào chỗ trống.",
+  "2. 場所を変えて、文を一つ書きましょう。": "2. Đổi địa điểm và viết một câu.",
+  "離 Ri ・ 自分の文を書く": "Ri: Viết câu về bản thân",
+  "昨日、何をしましたか？": "Hôm qua bạn đã làm gì?",
+  "昨日したことを、日本語で一つ書いてください。マイクで話して入力してもいいです。書いたら「文をチェック」を押してください。": "Viết một câu tiếng Nhật kể việc bạn đã làm hôm qua. Bạn cũng có thể bấm micro để nhập bằng giọng nói. Sau đó bấm Kiểm tra câu.",
+  "「昨日」はきのうのことです。文の終わりは「〜ました」です。": "昨日 nghĩa là hôm qua. Dùng đuôi 〜ました để kể việc đã làm.",
+  "「昨日」のことなので、「〜ました」を使います。": "Câu nói về hôm qua, nên dùng đuôi 〜ました.",
+  "「学校」を「としょかん」や「うち」に変えて書いてください。": "Đổi 学校 (trường học) thành としょかん (thư viện) hoặc うち (nhà), rồi viết lại câu.",
+  "例：昨日、としょかんへ行きました。": "Ví dụ: 昨日、としょかんへ行きました。",
+  "ここは書く練習です。文をチェックしたいときは、Ri で入力してください。": "Ô này để luyện viết. Muốn nhận phản hồi, hãy nhập câu ở phần Ri.",
+  "昨日したことを日本語で書く": "Viết bằng tiếng Nhật một việc đã làm hôm qua",
+  "例：昨日、うちでごはんを食べました。": "Ví dụ: 昨日、うちでごはんを食べました。",
+  "文をチェック": "Kiểm tra câu",
+  "1. 図を見て、四つの名前を読みましょう。": "1. Xem hình và đọc tên bốn bộ phận được ghi trên hình.",
+  "2. 下の説明を読んで、働きを確認しましょう。": "2. Đọc đoạn dưới để tìm hiểu chức năng của từng bộ phận.",
+  "二つの部品の働きを説明しましょう。": "Giải thích chức năng của hai bộ phận.",
+  "「細胞膜」「核」「ミトコンドリア」から二つ以上選び、それぞれの働きを日本語で一文ずつ書いてください。書いたら「説明をチェック」を押してください。": "Chọn ít nhất hai trong ba bộ phận: 細胞膜 (màng tế bào), 核 (nhân), ミトコンドリア (ti thể). Viết một câu tiếng Nhật về chức năng của mỗi bộ phận, rồi bấm Kiểm tra lời giải thích.",
+  "細胞について、日本語で二〜三文書くか、マイクで話してください。ここは話す練習です。AIと話すには「会話で続ける」を押してください。": "Viết hoặc dùng micro nói hai đến ba câu tiếng Nhật về tế bào. Ô này dùng để luyện nói và nhập câu. Bấm Tiếp tục bằng hội thoại để trò chuyện với AI.",
+  "下の三つから、細胞膜の働きを表す文を一つ選んでください。": "Chọn một trong ba câu dưới đây mô tả đúng chức năng của màng tế bào.",
+  "二つの部品の働きを日本語で書く": "Viết bằng tiếng Nhật về chức năng của hai bộ phận tế bào",
+  "例：細胞膜は内側と外側を分けます。核の中には遺伝情報があります。": "Ví dụ: 細胞膜は内側と外側を分けます。核の中には遺伝情報があります。",
+  "説明をチェック": "Kiểm tra lời giải thích",
+  "細胞について日本語で話すか書く": "Nói hoặc viết bằng tiếng Nhật về tế bào",
+
   "次へ：破 Ha →": "Tiếp → Ha",
   "次の弱点 →": "Điểm yếu tiếp theo →",
   "練習を終える": "Hoàn thành bài luyện",
@@ -236,7 +281,6 @@ const labels={
   "守 ・ 正しい型をまねる": "Xem mẫu: Làm theo cấu trúc đúng",
   "まず、聞いて読んでみましょう。": "Trước tiên hãy nghe và đọc.",
   "▶ 聞く": "▶ Nghe",
-  "知らない語や文を選択し、右クリックして「辞書で調べる」を使えます。": "Chọn từ hoặc câu chưa biết, nhấn chuột phải rồi chọn Tra từ điển.",
   "意味を確認しましょう。": "Hãy kiểm tra nghĩa.",
   "破 ・ 型を変えて使う": "Biến đổi: Thay đổi cấu trúc và sử dụng",
   "場所を変えて、同じ形を使いましょう。": "Thay địa điểm và dùng cùng cấu trúc.",
@@ -275,7 +319,6 @@ const labels={
   "守 ・ 名称を正確に覚える": "Xem mẫu: Nhớ đúng tên gọi",
   "まず、構造と名前を結びつけましょう。": "Trước tiên hãy liên hệ cấu trúc với tên gọi.",
   "短い説明を読みましょう。": "Hãy đọc phần giải thích ngắn.",
-  "分からない語を選択して右クリックすると、AIに日本語で質問してから辞書を開けます。": "Chọn từ chưa hiểu và nhấn chuột phải để hỏi bằng tiếng Nhật và mở từ điển.",
   "破 ・ 文脈の中で使う": "Biến đổi: Sử dụng trong ngữ cảnh",
   "専門語を使って短く説明してみましょう。": "Dùng từ chuyên ngành để giải thích ngắn gọn.",
   "「細胞膜」「核」「ミトコンドリア」から二つ以上使ってください。": "Dùng ít nhất hai từ: 細胞膜, 核, ミトコンドリア.",
@@ -389,7 +432,7 @@ function translate(root){
  if(language!=='vi'||!root)return;
  const walker=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);let node;
  while((node=walker.nextNode())){
-  if(node.parentElement?.closest('script,style,textarea,ruby,[data-no-translate],.teacher-message b,#chatLog,.context-example,.model-sentence,.reading-surface,.exercise-question,.answer,.flash-front-main,.flash-back h2,.dictionary-entry-title,.dictionary-reading,.dict-example,.dict-tag,.label-pill,.deck-item b,#dictSel,#personalExercise,[data-learning-content]'))continue;
+  if(node.parentElement?.closest('script,style,textarea,ruby,[data-no-translate],.teacher-message b,#chatLog,.context-example,.model-sentence,.reading-surface p:not(.muted),.exercise-question,.answer,.flash-front-main,.flash-back h2,.dictionary-entry-title,.dictionary-reading,.dict-example,.dict-tag,.label-pill,.deck-item b,#dictSel,#personalExercise,[data-learning-content]'))continue;
   const text=node.textContent.trim();const value=translatedText(text);if(value!==text){node.textContent=node.textContent.replace(text,value);node.parentElement?.setAttribute?.('data-ui-translated','true')}
  }
  root.querySelectorAll?.('[placeholder],[title],[aria-label],[alt]').forEach(el=>{for(const attr of ['placeholder','title','aria-label','alt']){const value=el.getAttribute(attr);if(value){const translated=translatedText(value);if(translated!==value)el.setAttribute(attr,translated)}}});

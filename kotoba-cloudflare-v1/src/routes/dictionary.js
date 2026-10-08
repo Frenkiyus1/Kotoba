@@ -10,6 +10,8 @@ export async function dictionaryLookup(request) {
 
   // 1) Ưu tiên khớp chính xác.
   if (DICTIONARY[selection]) return json(DICTIONARY[selection]);
+  const kanaEntry = Object.values(DICTIONARY).find(entry => entry.reading === selection);
+  if (kanaEntry) return json(kanaEntry);
 
   // 2) Nếu người học bôi cả câu, tìm entry dài nhất nằm trong câu đó.
   const keys = Object.keys(DICTIONARY).sort((a, b) => b.length - a.length);

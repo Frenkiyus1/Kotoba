@@ -205,6 +205,7 @@ POST /api/vocabulary/review
 
 POST /api/dictionary
 POST /api/ai/conversation
+POST /api/ai/support
 ```
 
 ---
@@ -231,7 +232,15 @@ Không chạy migration này nếu cột đã tồn tại. Migration giữ trìn
 
 ## Flashcard theo chủ đề hội thoại
 
-Ứng dụng có 7 chủ đề giống phần Hội thoại: cửa hàng tiện lợi, nhà hàng, trường học, bạn bè, nhà ga, du lịch và hội thoại tự do. Mỗi chủ đề có 30 từ, tổng cộng 210 thẻ, kèm cách đọc, nghĩa tiếng Việt và câu ví dụ. Trong Ôn tập, chọn chủ đề để xem danh sách từ và ôn riêng nhóm đó; lựa chọn được nhớ theo tài khoản trong trình duyệt. Khi tự tạo thẻ, bạn có thể chọn chủ đề hoặc để trong Thẻ tự tạo. Thẻ được lưu theo tài khoản, lật được hai chiều và luôn có nghĩa tiếng Việt ở mặt sau. Nội dung và lịch ôn của từ đã có được giữ nguyên; tải lại không tạo thẻ trùng.
+Ứng dụng có 7 chủ đề giống phần Hội thoại: cửa hàng tiện lợi, nhà hàng, trường học, bạn bè, nhà ga, du lịch và hội thoại tự do. Mỗi chủ đề có 30 từ, tổng cộng 210 thẻ, kèm cách đọc, nghĩa tiếng Việt và câu ví dụ. Trong Ôn tập, chọn chủ đề để xem danh sách từ và ôn riêng nhóm đó; lựa chọn được nhớ theo tài khoản trong trình duyệt. Khi tự tạo thẻ, bạn có thể chọn chủ đề hoặc để trong Thẻ tự tạo. Thẻ được lưu theo tài khoản. Chọn Nhật → Việt để xem tiếng Nhật trước, hoặc Việt → Nhật để xem nghĩa tiếng Việt trước rồi lật sang từ, cách đọc và ví dụ tiếng Nhật. Chiều ôn được nhớ theo tài khoản trong trình duyệt và không đổi lịch ôn. Nội dung và lịch ôn của từ đã có được giữ nguyên; tải lại không tạo thẻ trùng.
+
+## Hỗ trợ người mới và âm thanh
+
+Mục lục học tập dẫn tới trang và phần Shu/Ha/Ri đang có. Bài N5 dùng khẩu lệnh theo bước, giảm chữ Hán khó trong đoạn đọc và giữ furigana ở từ có cách đọc đã biết. Tra từ có nút Nghĩa/Cách đọc và nhập câu hỏi; micro là tùy chọn, có nút tra từ cho thao tác chọn trên điện thoại.
+
+Phần nghe/nói dùng chung `public/speech.js`, hiển thị lỗi quyền micro, trình duyệt, mạng hoặc giọng đọc, có thời gian chờ và phục hồi nút sau lỗi. Hội thoại có nút Nghe câu trả lời để phát lại câu mới nhất. Nhập bằng bàn phím vẫn dùng được khi nhận giọng nói không khả dụng; âm thanh thực tế phụ thuộc thiết bị và trình duyệt.
+
+Bot ở góc dưới phải gọi `POST /api/ai/support` qua binding `AI` hiện có. Route này chỉ trả lời hướng dẫn sử dụng, dùng được trước đăng nhập và không đọc hoặc sửa D1. Hướng dẫn có sẵn được ghi nhãn riêng với câu trả lời AI; khi AI lỗi, bot giữ câu hỏi để thử lại. Lịch sử bot chỉ tồn tại trong trang đang mở. Không cần migration database cho các thay đổi này.
 
 ## Kiểm tra sửa lỗi
 

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>今日の復習 — KOTOBA</title>
   <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="flashcard-direction.css">
 </head>
 <body data-page="review">
   <header class="navbar"><div class="container nav-inner"><a class="brand" href="dashboard.html"><span class="brand-mark">こ</span>KOTOBA</a><nav class="nav-links"><a href="dashboard.html">ホーム</a><a href="roadmap.html">学習</a><a href="biology.html">生物で学ぶ</a><a class="active" href="review.html">復習</a><a href="conversation.html">会話</a><a href="progress.html">進捗</a></nav><div class="nav-actions"><button class="icon-btn" data-focus>静</button><a class="avatar" href="profile.html">私</a></div></div></header>
@@ -17,6 +18,14 @@
           <p class="muted">会話と同じテーマで、各30語を復習できます。</p>
           <div class="review-topics" id="reviewTopics" role="group" aria-labelledby="reviewTopicsTitle"></div>
           <p class="muted" id="reviewTopicSummary" role="status" aria-live="polite"></p>
+        </section>
+        <section class="review-direction" aria-labelledby="reviewDirectionTitle" data-no-translate>
+          <h3 id="reviewDirectionTitle">カードの向き</h3>
+          <div class="review-direction-buttons" role="group" aria-labelledby="reviewDirectionTitle">
+            <button class="btn btn-secondary btn-small" id="directionJaVi" type="button" data-review-direction="ja-vi" aria-pressed="true">日本語 → ベトナム語</button>
+            <button class="btn btn-secondary btn-small" id="directionViJa" type="button" data-review-direction="vi-ja" aria-pressed="false">ベトナム語 → 日本語</button>
+          </div>
+          <p class="muted" id="reviewDirectionHint"></p>
         </section>
         <div class="review-heading"><span class="muted">今日のカード</span><b id="reviewPosition">0 / 0</b></div>
         <article class="card flashcard" id="flashcard"></article>
@@ -51,6 +60,6 @@
     </div>
   </main>
   <script src="dictionary-data.js"></script>
-  <script src="app.js"></script>
+  <script src="speech.js"></script><script src="app.js"></script>
 </body>
 </html>

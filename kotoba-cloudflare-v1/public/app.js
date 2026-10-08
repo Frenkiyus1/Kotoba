@@ -60,6 +60,9 @@
   const uiScript=document.createElement('script');uiScript.src='ui-language.js';document.head.appendChild(uiScript);
   if(['lesson','biology-lesson','review','personalized','conversation','profile'].includes(document.body.dataset.page)){const script=document.createElement('script');script.type='module';script.src='furigana.js';document.head.appendChild(script)}
   applyLanguageMode();
+  const supportStyle=document.createElement('link');supportStyle.rel='stylesheet';supportStyle.href='support-widget.css';document.head.appendChild(supportStyle);
+  const supportScript=document.createElement('script');supportScript.src='support-widget.js';document.head.appendChild(supportScript);
+  if(['dashboard','roadmap','lesson','biology','biology-lesson','review','personalized','conversation','progress','guide'].includes(document.body.dataset.page)){const contents=document.createElement('script');contents.type='module';contents.src='learning-contents.js';document.head.appendChild(contents)}
   ensureSeed();
 
   // global start links
@@ -107,30 +110,44 @@
   }));
 
   // lesson answers and error logging
-  $$('.answer[data-correct]').forEach(btn=>btn.addEventListener('click',()=>{const correct=btn.dataset.correct==='true';btn.classList.add(correct?'correct':'wrong');const fb=btn.closest('.study-block')?.querySelector('.quiz-feedback');if(fb)fb.textContent=correct?'正解です。次は自分の文で使ってみましょう。':'もう一度考えてみましょう。過去を表す「昨日」に注目してください。';if(!correct)addError(btn.dataset.error||'過去形','文法');updatePhaseNext(btn.closest('.phase'))}));
+  $$('.answer[data-correct]').forEach(button=>button.addEventListener('click',()=>{
+    const correct=button.dataset.correct==='true',phase=button.closest('.phase'),biology=document.body.dataset.track==='biology';
+    button.classList.add(correct?'correct':'wrong');const feedback=button.closest('.study-block')?.querySelector('.quiz-feedback');
+    if(feedback){
+      const vi=correct?(phase?.dataset.phase==='shu'?'Đúng rồi. Bấm Tiếp để sang phần Ha.':'Đúng rồi. Hãy thử viết câu của bạn.'):(biology?'Chưa đúng. Đọc lại chức năng của từng phần tế bào rồi chọn lại.':'Chưa đúng. “Hôm qua” cần dùng câu kết thúc bằng ました. Hãy chọn lại.');
+      const ja=correct?(phase?.dataset.phase==='shu'?'できました。「次へ」でHaへ進みましょう。':'できました。自分の文を書いてみましょう。'):(biology?'もう一度、細胞の説明を読んで選びましょう。':'「きのう」の文は「ました」を使います。もう一度選びましょう。');
+      feedback.textContent=supportsVietnamese()?vi:ja;
+    }
+    if(!correct)addError(button.dataset.error||'過去形',biology?'語彙':'文法');updatePhaseNext(phase);
+  }));
   function addError(key,type='文法'){const arr=load(STORE.errors,[]);const f=arr.find(x=>x.key===key);if(f)f.count++;else arr.push({key,count:1,type});save(STORE.errors,arr)}
 
   // free production check
   $('#productionCheck')?.addEventListener('click',()=>{const t=norm($('#productionText').value);const fb=$('#productionFeedback');if(!hasJapanese(t)){fb.textContent='日本語で答えてください。';return}if(/ました|でした/.test(t)){fb.textContent='よくできました。過去形を自然に使えています。';}else{fb.textContent='内容は伝わります。昨日のことなので、過去形も確認してみましょう。';addError('過去形','文法')}});
   $('#bioProductionCheck')?.addEventListener('click',()=>{const t=norm($('#bioProductionText').value);const fb=$('#bioProductionFeedback');if(!hasJapanese(t)){fb.textContent='日本語で説明してみましょう。';return}const hits=['細胞','細胞膜','核','ミトコンドリア'].filter(w=>t.includes(w));fb.textContent=hits.length>=2?'内容語を使って説明できています。次は理由や働きも加えてみましょう。':'今日の専門語を二つ以上使って説明してみましょう。';if(hits.length<2)addError('生物の専門語','語彙')});
 
-  // speech synthesis / recognition
-  $$('[data-speak]').forEach(b=>b.addEventListener('click',()=>{if(!('speechSynthesis' in window))return toast('このブラウザでは音声再生を利用できません。');speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(b.dataset.speak);u.lang='ja-JP';u.rate=.88;speechSynthesis.speak(u)}));
-  $$('[data-mic-target]').forEach(b=>b.addEventListener('click',()=>startRecognition(b.dataset.micTarget,b)));
-  let activeRecognition=null;
+  // Shared audio controls report errors inline and keep typing available.
+  let voiceStatusCount=0;
+  function audioStatus(button,text,error=false){
+    if(button&&!button.dataset.voiceStatus&&button.insertAdjacentElement){
+      const status=document.createElement('p');status.id=`voiceStatus${++voiceStatusCount}`;status.className='voice-status';status.dataset.noTranslate='';status.setAttribute('role','status');status.setAttribute('aria-live','polite');
+      (button.closest('.speech-row')||button).insertAdjacentElement('afterend',status);button.dataset.voiceStatus=status.id;
+    }
+    const status=button?document.getElementById(button.dataset.voiceStatus):null;
+    if(status){status.textContent=text;status.classList.toggle('voice-error',error);status.hidden=!text}else if(error)toast(text);
+  }
+  function speakJapanese(text,button){
+    if(!window.KotobaSpeech){toast(supportsVietnamese()?'Chưa tải được phần âm thanh. Hãy tải lại trang.':'音声機能を読み込めません。ページを更新してください。');return}
+    window.KotobaSpeech.speakJapanese(text,{button,onStatus:(_,message)=>audioStatus(button,message),onError:message=>audioStatus(button,message,true)});
+  }
+  $$('[data-speak]').forEach(button=>{button.setAttribute('aria-pressed','false');button.addEventListener('click',()=>speakJapanese(button.dataset.speak,button))});
+  $$('[data-mic-target]').forEach(button=>{button.textContent=supportsVietnamese()?'Nói bằng micro':'マイクで話す';button.setAttribute('aria-label',supportsVietnamese()?'Nói tiếng Nhật để điền vào ô trả lời':'日本語で話して、答えを入力する');button.setAttribute('aria-pressed','false');button.addEventListener('click',()=>startRecognition(button.dataset.micTarget,button))});
   function startRecognition(targetId,button,onFinal){
-    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-    const message=(vi,ja)=>supportsVietnamese()?vi:ja;
-    if(!SR){toast(message('Trình duyệt không hỗ trợ nhận giọng nói. Hãy nhập bằng bàn phím.','音声入力に対応していません。文字で入力してください。'));return}
-    if(activeRecognition){activeRecognition.stop();return}
-    window.speechSynthesis?.cancel();
-    const original=button.textContent,r=new SR();let received=false;
-    r.lang='ja-JP';r.interimResults=false;r.continuous=false;
-    const reset=()=>{if(activeRecognition===r)activeRecognition=null;button.classList.remove('listening');button.textContent=original;button.setAttribute('aria-pressed','false')};
-    r.onresult=e=>{const text=Array.from(e.results).filter(x=>x.isFinal!==false).map(x=>x[0].transcript).join('');if(!text.trim()||received)return;received=true;const t=document.getElementById(targetId);if(t)t.value=text;if(onFinal)onFinal(text)};
-    r.onerror=e=>{received=true;reset();toast(message(e.error==='not-allowed'?'Hãy cho phép trang sử dụng micro.':'Không nhận được giọng nói. Hãy thử lại hoặc nhập bằng bàn phím.',e.error==='not-allowed'?'マイクの使用を許可してください。':'音声を認識できません。文字入力も利用できます。'))};
-    r.onend=()=>{reset();if(!received)toast(message('Chưa nghe được câu nói. Hãy thử lại.','音声が聞き取れませんでした。もう一度お試しください。'))};
-    try{activeRecognition=r;button.classList.add('listening');button.textContent='…';button.setAttribute('aria-pressed','true');r.start()}catch(e){reset();toast(message('Không mở được micro. Hãy thử lại hoặc nhập bằng bàn phím.','マイクを開始できません。文字で入力してください。'))}
+    if(!window.KotobaSpeech){audioStatus(button,supportsVietnamese()?'Chưa tải được phần micro. Hãy tải lại trang hoặc nhập bằng bàn phím.':'マイク機能を読み込めません。文字で入力してください。',true);return}
+    return window.KotobaSpeech.listen({button,onStatus:(_,message)=>audioStatus(button,message),onError:message=>audioStatus(button,message,true),onTranscript:text=>{
+      const target=document.getElementById(targetId);if(target){target.value=text;target.dispatchEvent?.(new Event('input',{bubbles:true}));if(!onFinal)target.focus?.()}
+      if(onFinal)onFinal(text);
+    }});
   }
 
   // Focus mode
@@ -141,887 +158,69 @@
 
   // Dictionary
   // ============================================================
-// DICTIONARY — VOICE ONLY
+// DICTIONARY — SELECTION LOOKUP WITH OPTIONAL VOICE
 // ============================================================
 
 initDictionary();
 
-function initDictionary() {
-  const root = $('.dictionary-enabled');
-
-  // Trang nào không bật dictionary thì dừng.
-  if (!root) return;
-
-  const state = {
-    text: '',
-    context: '',
-    rect: null,
-    node: null
-  };
-
-  let recognition = null;
-  let isListening = false;
-
-  // ----------------------------------------------------------
-  // 1. Menu chuột phải
-  // ----------------------------------------------------------
-
-  const menu = document.createElement('div');
-
-  menu.className = 'dictionary-context-menu';
-
-  menu.innerHTML = `
-    <button type="button">
-      <span class="jp">辞</span>
-      <span>辞書で調べる</span>
-    </button>
-  `;
-
-  document.body.appendChild(menu);
-
-
-  // ----------------------------------------------------------
-  // 2. Dictionary panel
-  // Không còn textarea / nhập bằng bàn phím.
-  // ----------------------------------------------------------
-
-  const panel = document.createElement('section');
-
-  panel.className = 'dictionary-panel';
-
-  panel.innerHTML = `
-    <div class="dictionary-panel-head">
-
-      <div>
-        <span class="dictionary-label">
-          AI学習サポート
-        </span>
-
-        <strong id="dictSel"></strong>
-      </div>
-
-      <button
-        class="dictionary-close"
-        type="button"
-        aria-label="閉じる"
-      >
-        ×
-      </button>
-
-    </div>
-
-
-    <div
-      id="dictGate"
-      class="dictionary-gate"
-    >
-
-      <div class="dictionary-ai-message">
-
-        <span class="ai-mini jp">
-          先
-        </span>
-
-        <div>
-          <strong>
-            どんなことを知りたいですか？
-          </strong>
-
-          <p>
-            日本語で話してください。
-          </p>
-        </div>
-
-      </div>
-
-
-      <div class="dictionary-voice">
-
-        <button
-          id="dictMic"
-          class="dictionary-mic"
-          type="button"
-        >
-
-          <span
-            class="dictionary-mic-icon"
-            aria-hidden="true"
-          >
-            ●
-          </span>
-
-          <span id="dictMicLabel">
-            話してください
-          </span>
-
-        </button>
-
-
-        <div
-          id="dictTranscriptBox"
-          class="dictionary-transcript hidden"
-        >
-
-          <span class="dictionary-transcript-label">
-            あなた
-          </span>
-
-          <p id="dictTranscript"></p>
-
-        </div>
-
-
-        <p
-          id="dictStatus"
-          class="dictionary-gate-status"
-        ></p>
-
-      </div>
-
-    </div>
-
-
-    <div
-      id="dictResult"
-      class="dictionary-result hidden"
-    ></div>
-  `;
-
+function initDictionary(){
+  const root=$('.dictionary-enabled');if(!root)return;
+  const state={text:'',context:'',rect:null};let generation=0,controller=null,busy=false;
+  const message=(vi,ja)=>supportsVietnamese()?vi:ja;
+  const menu=document.createElement('div');menu.className='dictionary-context-menu';
+  menu.innerHTML='<button type="button">辞書で調べる</button>';document.body.appendChild(menu);
+  const action=document.createElement('button');action.type='button';action.className='dictionary-selection-action';action.dataset.noTranslate='';action.textContent=message('Tra từ đã chọn','選んだことばを調べる');document.body.appendChild(action);
+  const panel=document.createElement('section');panel.className='dictionary-panel';panel.setAttribute('role','dialog');panel.setAttribute('aria-label',message('Tra từ trong bài','ことばを調べる'));
+  panel.innerHTML=`<div class="dictionary-panel-head"><div><span class="dictionary-label">辞書</span><strong id="dictSel"></strong></div><button type="button" class="dictionary-close" aria-label="閉じる">×</button></div>
+    <div id="dictGate" class="dictionary-gate"><div class="dictionary-ai-message"><div><strong>意味か読み方を調べましょう。</strong><p>ボタンを選ぶか、質問を入力してください。マイクも使えます。</p></div></div>
+      <div class="dictionary-shortcuts"><button type="button" class="btn btn-secondary btn-small" data-dict-question="このことばの意味は何ですか。">意味を調べる</button><button type="button" class="btn btn-secondary btn-small" data-dict-question="このことばの読み方は何ですか。">読み方を調べる</button></div>
+      <form id="dictQuestionForm" class="dictionary-question-form"><label for="dictQuestion">日本語で質問する（任意）</label><input id="dictQuestion" maxlength="500" placeholder="例：このことばの意味は何ですか。"><button type="submit" class="btn btn-primary btn-small" id="dictLookup">辞書を開く</button></form>
+      <div class="dictionary-voice"><button id="dictMic" class="btn btn-secondary" type="button" aria-pressed="false">マイクで質問する</button><div id="dictTranscriptBox" class="dictionary-transcript hidden"><span class="dictionary-transcript-label">あなた</span><p id="dictTranscript"></p></div><p id="dictStatus" class="dictionary-gate-status" role="status" aria-live="polite" data-no-translate></p></div>
+    </div><div id="dictResult" class="dictionary-result hidden"></div>`;
   document.body.appendChild(panel);
-
-
-  // ----------------------------------------------------------
-  // 3. Đọc đoạn text hiện đang được bôi đen
-  // ----------------------------------------------------------
-
-  const readSel = () => {
-    const selection = getSelection();
-
-    if (
-      !selection ||
-      selection.rangeCount === 0 ||
-      selection.isCollapsed
-    ) {
-      return null;
-    }
-
-    const text =
-      norm(window.KotobaFurigana?.baseText(selection.getRangeAt(0).cloneContents()) ?? selection.toString());
-
-    // Chỉ xử lý text có tiếng Nhật.
-    if (
-      !text ||
-      !hasJapanese(text)
-    ) {
-      return null;
-    }
-
-    const range =
-      selection.getRangeAt(0);
-
-    const element =
-      range.commonAncestorContainer.nodeType === 1
-        ? range.commonAncestorContainer
-        : range.commonAncestorContainer.parentElement;
-
-    if (
-      !element ||
-      !root.contains(element)
-    ) {
-      return null;
-    }
-
-    const context =
-      element.closest('[data-dictionary-context]') ||
-      element.closest('.reading-surface') ||
-      element;
-
-    const rect =
-      range.getBoundingClientRect();
-
-    if (
-      !rect.width &&
-      !rect.height
-    ) {
-      return null;
-    }
-
-    return {
-      text: text.slice(0, 180),
-      context: norm(window.KotobaFurigana?.baseText(context) ?? context.textContent).slice(0, 900),
-      rect,
-      node: context
-    };
-  };
-
-
-  // ----------------------------------------------------------
-  // 4. Cache selection
-  //
-  // Quan trọng:
-  // Browser đôi khi mất selection khi người dùng click chuột phải.
-  // ----------------------------------------------------------
-
-  const cacheSelection = () => {
-    const current = readSel();
-
-    if (current) {
-      Object.assign(
-        state,
-        current
-      );
-    }
-  };
-
-
-  document.addEventListener(
-    'selectionchange',
-    () => requestAnimationFrame(cacheSelection)
-  );
-
-  root.addEventListener(
-    'mouseup',
-    cacheSelection
-  );
-
-  root.addEventListener(
-    'keyup',
-    cacheSelection
-  );
-
-
-  // ----------------------------------------------------------
-  // 5. Kiểm tra chuột phải có gần selection hay không
-  // ----------------------------------------------------------
-
-  const nearSelection = (
-    x,
-    y,
-    rect
-  ) => {
-
-    return (
-      rect &&
-      x >= rect.left - 16 &&
-      x <= rect.right + 16 &&
-      y >= rect.top - 16 &&
-      y <= rect.bottom + 16
-    );
-
-  };
-
-
-  // ----------------------------------------------------------
-  // 6. Chuột phải -> hiện 辞書で調べる
-  // ----------------------------------------------------------
-
-  document.addEventListener(
-    'contextmenu',
-    event => {
-
-      if (
-        panel.contains(event.target) ||
-        menu.contains(event.target)
-      ) {
-        return;
-      }
-
-
-      const live =
-        readSel();
-
-
-      const selected =
-        live ||
-        (
-          state.text &&
-          nearSelection(
-            event.clientX,
-            event.clientY,
-            state.rect
-          )
-            ? state
-            : null
-        );
-
-
-      if (!selected) {
-        return;
-      }
-
-
-      event.preventDefault();
-
-
-      Object.assign(
-        state,
-        selected
-      );
-
-
-      menu.style.left =
-        Math.min(
-          event.clientX,
-          innerWidth - 190
-        ) + 'px';
-
-
-      menu.style.top =
-        Math.min(
-          event.clientY,
-          innerHeight - 60
-        ) + 'px';
-
-
-      menu.classList.add('show');
-
-    }
-  );
-
-
-  // ----------------------------------------------------------
-  // 7. Click ngoài -> đóng context menu
-  // ----------------------------------------------------------
-
-  document.addEventListener(
-    'click',
-    event => {
-
-      if (
-        !menu.contains(event.target)
-      ) {
-        menu.classList.remove('show');
-      }
-
-    }
-  );
-
-
-  // ----------------------------------------------------------
-  // 8. Mở dictionary voice gate
-  // ----------------------------------------------------------
-
-  menu
-    .querySelector('button')
-    .onclick = () => {
-
-      menu.classList.remove('show');
-
-
-      $('#dictSel').textContent =
-        `「${state.text}」`;
-
-
-      $('#dictGate')
-        .classList
-        .remove('hidden');
-
-
-      $('#dictResult')
-        .classList
-        .add('hidden');
-
-
-      $('#dictTranscriptBox')
-        .classList
-        .add('hidden');
-
-
-      $('#dictTranscript')
-        .textContent = '';
-
-
-      $('#dictStatus')
-        .textContent = '';
-
-
-      resetMicButton();
-
-
-      panel.classList.add('show');
-
-
-      positionPanel(
-        panel,
-        state.rect
-      );
-
-
-      // AI Teacher nói thật bằng tiếng Nhật.
-      speakJapanese(
-        'どんなことを知りたいですか？日本語で話してください。'
-      );
-
-    };
-
-
-  // ----------------------------------------------------------
-  // 9. Đóng panel
-  // ----------------------------------------------------------
-
-  panel
-    .querySelector('.dictionary-close')
-    .onclick = () => {
-
-      stopRecognition();
-
-      window.speechSynthesis?.cancel();
-
-      panel.classList.remove('show');
-
-    };
-
-
-  // ----------------------------------------------------------
-  // 10. Microphone button
-  // ----------------------------------------------------------
-
-  $('#dictMic').onclick = () => {
-
-    if (isListening) {
-      stopRecognition();
-      return;
-    }
-
-    startDictionaryRecognition();
-
-  };
-
-
-  // ----------------------------------------------------------
-  // 11. Speech Recognition
-  // ----------------------------------------------------------
-
-  function startDictionaryRecognition() {
-
-    const SpeechRecognition =
-      window.SpeechRecognition ||
-      window.webkitSpeechRecognition;
-
-
-    const status =
-      $('#dictStatus');
-
-
-    // Browser không hỗ trợ microphone STT.
-    if (!SpeechRecognition) {
-
-      status.textContent =
-        'このブラウザでは音声認識を利用できません。';
-
-      status.className =
-        'dictionary-gate-status error';
-
-      return;
-    }
-
-
-    // Ngừng AI đang nói trước khi mở microphone.
-    window.speechSynthesis?.cancel();
-
-
-    recognition =
-      new SpeechRecognition();
-
-
-    // Quan trọng: bắt buộc nhận dạng tiếng Nhật.
-    recognition.lang =
-      'ja-JP';
-
-
-    recognition.interimResults =
-      true;
-
-
-    recognition.continuous =
-      false;
-
-
-    recognition.maxAlternatives =
-      1;
-
-
-    isListening =
-      true;
-
-
-    $('#dictMic')
-      .classList
-      .add('listening');
-
-
-    $('#dictMicLabel')
-      .textContent =
-        '聞いています...';
-
-
-    status.textContent =
-      '日本語で質問してください。';
-
-
-    status.className =
-      'dictionary-gate-status';
-
-
-    // --------------------------------------------------------
-    // Nhận giọng nói
-    // --------------------------------------------------------
-
-    recognition.onresult = event => {
-
-      let transcript = '';
-      let finalTranscript = '';
-
-
-      for (
-        let i = event.resultIndex;
-        i < event.results.length;
-        i++
-      ) {
-
-        const result =
-          event.results[i];
-
-
-        transcript +=
-          result[0].transcript;
-
-
-        if (result.isFinal) {
-          finalTranscript +=
-            result[0].transcript;
-        }
-
-      }
-
-
-      $('#dictTranscriptBox')
-        .classList
-        .remove('hidden');
-
-
-      $('#dictTranscript')
-        .textContent =
-          transcript;
-
-
-      // Chỉ gửi sang AI khi câu nói hoàn tất.
-      if (finalTranscript) {
-
-        handleDictionaryVoiceQuestion(
-          finalTranscript
-        );
-
-      }
-
-    };
-
-
-    // --------------------------------------------------------
-    // Lỗi microphone
-    // --------------------------------------------------------
-
-    recognition.onerror = event => {
-
-      isListening =
-        false;
-
-
-      resetMicButton();
-
-
-      if (
-        event.error === 'not-allowed'
-      ) {
-
-        status.textContent =
-          'マイクの使用を許可してください。';
-
-      } else {
-
-        status.textContent =
-          '音声を認識できませんでした。もう一度話してください。';
-
-      }
-
-
-      status.className =
-        'dictionary-gate-status error';
-
-    };
-
-
-    recognition.onend = () => {
-
-      isListening =
-        false;
-
-
-      resetMicButton();
-
-    };
-
-
-    try {
-
-      recognition.start();
-
-    } catch (error) {
-
-      console.error(
-        'SpeechRecognition:',
-        error
-      );
-
-    }
-
+  const status=$('#dictStatus'),mic=$('#dictMic'),form=$('#dictQuestionForm'),question=$('#dictQuestion');
+  const setStatus=(text,error=false)=>{status.textContent=text;status.classList.toggle('error',error)};
+  function readSelection(){
+    const selection=getSelection();if(!selection?.rangeCount||selection.isCollapsed)return null;
+    const range=selection.getRangeAt(0);const element=range.commonAncestorContainer.nodeType===1?range.commonAncestorContainer:range.commonAncestorContainer.parentElement;
+    if(!element||!root.contains(element)||element.closest('rt,rp'))return null;
+    const text=norm(window.KotobaFurigana?.baseText(range.cloneContents())??selection.toString());if(!text||!hasJapanese(text))return null;
+    const context=element.closest('[data-dictionary-context],.reading-surface')||element;const rect=range.getBoundingClientRect();if(!rect.width&&!rect.height)return null;
+    return {text:text.slice(0,180),context:norm(window.KotobaFurigana?.baseText(context)??context.textContent).slice(0,900),rect};
   }
-
-
-  // ----------------------------------------------------------
-  // 12. Xử lý câu hỏi người học vừa nói
-  // ----------------------------------------------------------
-
-  async function handleDictionaryVoiceQuestion(
-    spokenText
-  ) {
-
-    const question =
-      norm(spokenText);
-
-
-    const status =
-      $('#dictStatus');
-
-
-    // --------------------------------------------------------
-    // Không phải tiếng Nhật
-    // --------------------------------------------------------
-
-    if (
-      !hasJapanese(question)
-    ) {
-
-      status.textContent =
-        '日本語で聞いてみましょう。';
-
-
-      status.className =
-        'dictionary-gate-status error';
-
-
-      speakJapanese(
-        '日本語で聞いてみましょう。'
-      );
-
-
-      return;
-
-    }
-
-
-    // --------------------------------------------------------
-    // Câu nói quá mơ hồ
-    //
-    // Ví dụ:
-    // はい
-    // いいえ
-    // わかりました
-    // --------------------------------------------------------
-
-    const meaningfulQuestion =
-      /(意味|どういう|何|なに|読み|よみ|使|つか|文法|例文|違い|教えて|訳|発音|品詞|この文|この場合|知りたい)/;
-
-
-    if (
-      !meaningfulQuestion.test(question)
-    ) {
-
-      status.textContent =
-        'もう少し詳しく質問してみましょう。';
-
-
-      status.className =
-        'dictionary-gate-status error';
-
-
-      speakJapanese(
-        'もう少し詳しく質問してみましょう。'
-      );
-
-
-      return;
-
-    }
-
-
-    // --------------------------------------------------------
-    // AI đã hiểu câu hỏi
-    // --------------------------------------------------------
-
-    status.textContent =
-      '考えています...';
-
-
-    status.className =
-      'dictionary-gate-status';
-
-
-    const entry =
-      await resolveEntry(
-        state.text,
-        state.context,
-        question
-      );
-
-
-    // --------------------------------------------------------
-    // Không tìm được dictionary entry
-    // --------------------------------------------------------
-
-    if (!entry) {
-
-      status.textContent =
-        'この語句はまだ辞書に登録されていません。';
-
-
-      status.className =
-        'dictionary-gate-status error';
-
-
-      speakJapanese(
-        'この語句はまだ辞書に登録されていません。'
-      );
-
-
-      return;
-
-    }
-
-
-    // --------------------------------------------------------
-    // Thành công -> mở dictionary
-    // --------------------------------------------------------
-
-    speakJapanese(
-      'わかりました。辞書を開きます。'
-    );
-
-
-    renderEntry(
-      entry,
-      state.text
-    );
-
-
-    $('#dictGate')
-      .classList
-      .add('hidden');
-
-
-    $('#dictResult')
-      .classList
-      .remove('hidden');
-
+  function cacheSelection(){
+    const selected=readSelection();if(!selected){action.classList.remove('show');return}
+    Object.assign(state,selected);action.style.left=Math.max(12,Math.min(state.rect.left,innerWidth-190))+'px';action.style.top=Math.max(8,Math.min(state.rect.bottom+8,innerHeight-55))+'px';action.classList.add('show');
   }
-
-
-  // ----------------------------------------------------------
-  // 13. Dừng microphone
-  // ----------------------------------------------------------
-
-  function stopRecognition() {
-
-    if (!recognition) return;
-
-
-    try {
-      recognition.stop();
-    } catch (_) {}
-
-
-    recognition =
-      null;
-
-
-    isListening =
-      false;
-
-
-    resetMicButton();
-
+  document.addEventListener('selectionchange',()=>requestAnimationFrame(cacheSelection));root.addEventListener('mouseup',cacheSelection);root.addEventListener('touchend',()=>requestAnimationFrame(cacheSelection));
+  document.addEventListener('contextmenu',event=>{const selected=readSelection();if(!selected||panel.contains(event.target))return;event.preventDefault();Object.assign(state,selected);action.classList.remove('show');menu.style.left=Math.max(12,Math.min(event.clientX,innerWidth-190))+'px';menu.style.top=Math.max(8,Math.min(event.clientY,innerHeight-60))+'px';menu.classList.add('show')});
+  function open(){
+    if(!state.text)return;generation++;controller?.abort();busy=false;window.KotobaSpeech?.stopListening();window.KotobaSpeech?.stopSpeaking();
+    menu.classList.remove('show');action.classList.remove('show');$('#dictSel').textContent=`「${state.text}」`;$('#dictGate').classList.remove('hidden');$('#dictResult').classList.add('hidden');$('#dictTranscriptBox').classList.add('hidden');question.value='';$('#dictLookup').disabled=false;mic.disabled=false;$$('[data-dict-question]',panel).forEach(button=>button.disabled=false);setStatus('');panel.classList.add('show');positionPanel(panel,state.rect);question.focus({preventScroll:true});
   }
-
-
-  // ----------------------------------------------------------
-  // 14. Reset trạng thái button microphone
-  // ----------------------------------------------------------
-
-  function resetMicButton() {
-
-    $('#dictMic')
-      ?.classList
-      .remove('listening');
-
-
-    const label =
-      $('#dictMicLabel');
-
-
-    if (label) {
-
-      label.textContent =
-        '話してください';
-
-    }
-
+  function close(){generation++;controller?.abort();window.KotobaSpeech?.stopListening();window.KotobaSpeech?.stopSpeaking();panel.classList.remove('show')}
+  action.addEventListener('mousedown',event=>event.preventDefault());action.onclick=open;menu.querySelector('button').onclick=open;panel.querySelector('.dictionary-close').onclick=close;
+  document.addEventListener('keydown',event=>{if(event.key==='Escape'&&(panel.classList.contains('show')||menu.classList.contains('show')||action.classList.contains('show'))){close();menu.classList.remove('show');action.classList.remove('show')}});
+  document.addEventListener('click',event=>{if(!menu.contains(event.target))menu.classList.remove('show')});
+  async function lookup(value){
+    if(busy||!panel.classList.contains('show'))return;
+    const text=norm(value)||'このことばの意味は何ですか。';
+    if(text.length>500){setStatus(message('Câu hỏi tối đa 500 ký tự.','質問は500文字までです。'),true);return}
+    busy=true;const current=generation;controller=new AbortController();const lookupController=controller;const timer=setTimeout(()=>lookupController.abort(),15000);
+    $('#dictLookup').disabled=true;mic.disabled=true;$$('[data-dict-question]',panel).forEach(button=>button.disabled=true);window.KotobaSpeech?.stopListening();setStatus(message('Đang tra từ…','調べています…'));
+    try{
+      const entry=await resolveEntry(state.text,state.context,text,lookupController.signal);if(current!==generation)return;
+      if(!entry){setStatus(message('Chưa có từ này trong từ điển. Thử chọn một từ ngắn hơn.','このことばはまだありません。短いことばを選んでください。'),true);return}
+      renderEntry(entry,state.text);$('#dictGate').classList.add('hidden');$('#dictResult').classList.remove('hidden');
+    }catch(error){if(current===generation)setStatus(message('Chưa tra được từ. Kiểm tra kết nối rồi thử lại.','調べられませんでした。通信を確認して、もう一度試してください。'),true)}
+    finally{clearTimeout(timer);if(current===generation){busy=false;$('#dictLookup').disabled=false;mic.disabled=false;$$('[data-dict-question]',panel).forEach(button=>button.disabled=false)}}
   }
-
-
-  // ----------------------------------------------------------
-  // 15. Text To Speech — AI Teacher nói tiếng Nhật
-  // ----------------------------------------------------------
-
-  function speakJapanese(text) {
-
-    if (
-      !('speechSynthesis' in window)
-    ) {
-      return;
-    }
-
-
-    window.speechSynthesis?.cancel();
-
-
-    const speech =
-      new SpeechSynthesisUtterance(
-        text
-      );
-
-
-    speech.lang =
-      'ja-JP';
-
-
-    speech.rate =
-      0.92;
-
-
-    speech.pitch =
-      1;
-
-
-    speechSynthesis.speak(
-      speech
-    );
-
-  }
-
+  form.addEventListener('submit',event=>{event.preventDefault();lookup(question.value)});$$('[data-dict-question]',panel).forEach(button=>button.onclick=()=>{question.value=button.dataset.dictQuestion;lookup(question.value)});
+  mic.onclick=()=>window.KotobaSpeech?.listen({button:mic,onStatus:(_,text)=>setStatus(text),onError:text=>setStatus(text,true),onTranscript:text=>{question.value=text;$('#dictTranscriptBox').classList.remove('hidden');$('#dictTranscript').textContent=text;lookup(text)}});
 }
   function positionPanel(p,r){const w=Math.min(440,innerWidth-24);p.style.width=w+'px';let left=r?.left||16,top=(r?.bottom||80)+12;left=Math.max(12,Math.min(left,innerWidth-w-12));if(top+590>innerHeight)top=Math.max(12,(r?.top||450)-470);p.style.left=left+'px';p.style.top=top+'px'}
-  async function resolveEntry(sel,ctx,q){if(window.KOTOBA_DICTIONARY_ENDPOINT){try{const res=await fetch(window.KOTOBA_DICTIONARY_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({selection:sel,context:ctx,question:q})});if(res.ok)return await res.json()}catch(e){}}
-    const exact=window.KOTOBA_PHRASES?.[sel]||window.KOTOBA_DICTIONARY?.[sel];if(exact)return Object.assign({term:sel},exact);const keys=Object.keys(window.KOTOBA_DICTIONARY||{}).filter(k=>sel.includes(k)).sort((a,b)=>b.length-a.length);if(keys.length)return Object.assign({term:keys[0]},window.KOTOBA_DICTIONARY[keys[0]]);return null}
+  async function resolveEntry(sel,ctx,q,signal){if(window.KOTOBA_DICTIONARY_ENDPOINT){try{const res=await fetch(window.KOTOBA_DICTIONARY_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({selection:sel,context:ctx,question:q}),signal});if(res.ok)return await res.json()}catch(e){}}
+    const exact=window.KOTOBA_PHRASES?.[sel]||window.KOTOBA_DICTIONARY?.[sel];if(exact)return Object.assign({term:sel},exact);const kanaEntry=Object.entries(window.KOTOBA_DICTIONARY||{}).find(([,entry])=>entry.reading===sel);if(kanaEntry)return Object.assign({term:kanaEntry[0]},kanaEntry[1]);const keys=Object.keys(window.KOTOBA_DICTIONARY||{}).filter(k=>sel.includes(k)).sort((a,b)=>b.length-a.length);if(keys.length)return Object.assign({term:keys[0]},window.KOTOBA_DICTIONARY[keys[0]]);return null}
   function renderEntry(entry,selected){const r=$('#dictResult');const ex=(entry.examples||[]).map(x=>`<div class="dict-example"><div>${x.jp}</div><div class="vi">${x.vi}</div></div>`).join('');r.innerHTML=`<h3 class="dictionary-entry-title jp" data-reading="${escapeHtml(entry.reading)}">${escapeHtml(entry.term||selected)}</h3><div class="dictionary-reading">${entry.reading||''} ・ ${entry.pos||''}</div><div class="dict-section"><h4>この文での意味</h4><strong>${supportsVietnamese()?(entry.meaningVi||entry.usage||''):(entry.meaningJa||entry.usage||'例文で使い方を確認してください。')}</strong></div>${supportsVietnamese()&&entry.otherMeanings?.length?`<div class="dict-section"><h4>ほかの意味</h4>${entry.otherMeanings.map(x=>`<div>・${x}</div>`).join('')}</div>`:''}<div class="dict-section"><h4>使い方</h4><div data-furigana-content>${escapeHtml(entry.usage)}</div></div><div class="dict-section"><h4>文法・よく使う形</h4><div class="dict-tags">${(entry.grammar||[]).map(x=>`<span class="dict-tag">${x}</span>`).join('')}</div></div>${entry.kanji?.length?`<div class="dict-section"><h4>漢字</h4>${entry.kanji.map(x=>`<div>・${x}</div>`).join('')}</div>`:''}<div class="dict-section"><h4>例文</h4>${ex}</div><div class="dict-section"><h4>関連語</h4><div class="dict-tags">${(entry.related||[]).map(x=>`<span class="dict-tag">${x}</span>`).join('')}</div></div><div class="dict-added">「今日の単語」に自動で追加しました。</div>`;addToDeck(entry,selected)}
   function addToDeck(entry,selected){if(entry.pos==='文')return;const term=entry.term||selected;if(!term||term.length>25)return;const deck=load(STORE.deck,[]);const found=deck.find(c=>c.term===term);if(found){found.lastSeen=todayKey();found.exposures=(found.exposures||1)+1}else deck.push({term,reading:entry.reading,meaning:entry.meaningVi,example:entry.examples?.[0]?.jp||selected,source:document.body.dataset.track==='biology'?'生物':'辞書',stage:0,interval:0,due:todayKey(),reviews:0,exposures:1,lastSeen:todayKey()});save(STORE.deck,deck);toast(`「${term}」を今日の単語に追加しました。`)}
 
@@ -1029,7 +228,11 @@ function initDictionary() {
   if(document.body.dataset.page==='review')initReview();
   function initReview(){
     const deck=load(STORE.deck,[]),topics=serverFlashcardTopics;
-    const topicKey=`kotoba.reviewTopic.${load(STORE.user,{}).id||'guest'}`;
+    const accountId=load(STORE.user,{}).id||'guest';
+    const topicKey=`kotoba.reviewTopic.${accountId}`;
+    const directionKey=`kotoba.reviewDirection.${accountId}`;
+    const previousDirection=load(directionKey,'ja-vi');
+    let direction=['ja-vi','vi-ja'].includes(previousDirection)?previousDirection:'ja-vi';
     const validTopics=new Set(['all','personal',...topics.map(topic=>topic.id)]);
     const previousTopic=load(topicKey,null);
     let activeTopic=validTopics.has(previousTopic)?previousTopic:(topics[0]?.id||'all');
@@ -1056,6 +259,30 @@ function initDictionary() {
     const fields=$('#addWordFields'),submit=$('#addWordSubmit'),wordTopic=$('#wordTopic');
     const error=$('#addWordError'),status=$('#addWordStatus');
     const ratingButtons=[$('#rateAgain'),$('#rateHard'),$('#rateGood')];
+    const directionButtons=[$('#directionJaVi'),$('#directionViJa')].filter(Boolean);
+    const renderDirection=()=>{
+      const vietnamese=supportsVietnamese();
+      const title=$('#reviewDirectionTitle'),hint=$('#reviewDirectionHint');
+      if(title)title.textContent=vietnamese?'Chiều học':'カードの向き';
+      if(hint)hint.textContent=vietnamese
+        ?(direction==='vi-ja'?'Nhìn nghĩa tiếng Việt và nhớ từ tiếng Nhật. Bấm thẻ để xem đáp án, rồi chọn mức độ nhớ.':'Nhìn từ tiếng Nhật và nhớ nghĩa tiếng Việt. Bấm thẻ để xem đáp án, rồi chọn mức độ nhớ.')
+        :(direction==='vi-ja'?'ベトナム語の意味から日本語を思い出しましょう。カードを押して答えを見て、覚えた度合いを選びます。':'日本語からベトナム語の意味を思い出しましょう。カードを押して答えを見て、覚えた度合いを選びます。');
+      directionButtons.forEach(button=>{
+        const selected=button.dataset.reviewDirection===direction;
+        button.textContent=vietnamese
+          ?(button.dataset.reviewDirection==='vi-ja'?'Việt → Nhật':'Nhật → Việt')
+          :(button.dataset.reviewDirection==='vi-ja'?'ベトナム語 → 日本語':'日本語 → ベトナム語');
+        button.classList.toggle('active',selected);
+        button.setAttribute('aria-pressed',String(selected));
+        button.disabled=busy;
+      });
+    };
+    directionButtons.forEach(button=>button.addEventListener('click',()=>{
+      if(busy||direction===button.dataset.reviewDirection)return;
+      direction=button.dataset.reviewDirection;
+      rawSave(directionKey,direction);
+      render();
+    }));
     const selectTopic=id=>{
       if(busy||!validTopics.has(id))return;
       activeTopic=id;
@@ -1103,6 +330,7 @@ function initDictionary() {
       busy=value;
       fields.disabled=value;
       ratingButtons.forEach(button=>button.disabled=value);
+      directionButtons.forEach(button=>button.disabled=value);
       Array.from(topicPanel.children).forEach(button=>button.disabled=value);
       submit.textContent=value?'保存中…':'カードに追加';
     };
@@ -1116,8 +344,8 @@ function initDictionary() {
       $('#flashFront')?.setAttribute('aria-hidden',String(flipped));
       $('#flashBack')?.setAttribute('aria-hidden',String(!flipped));
       card.setAttribute('aria-label',supportsVietnamese()
-        ?(flipped?'Lật thẻ về mặt trước':'Lật thẻ để xem nghĩa tiếng Việt')
-        :(flipped?'カードを表に戻す':'カードを裏返してベトナム語の意味を見る'));
+        ?(flipped?'Lật thẻ về mặt trước':(direction==='vi-ja'?'Lật thẻ để xem từ tiếng Nhật':'Lật thẻ để xem nghĩa tiếng Việt'))
+        :(flipped?'カードを表に戻す':(direction==='vi-ja'?'カードを裏返して日本語を見る':'カードを裏返してベトナム語の意味を見る')));
     };
     const flip=()=>{if(card.dataset.term)setFlipped(!card.classList.contains('flipped'))};
     card.addEventListener('click',flip);
@@ -1130,7 +358,9 @@ function initDictionary() {
     reveal.onclick=flip;
     const render=()=>{
       renderTopics();
-      renderDeckList(scopeDeck);
+      renderDirection();
+      renderDeckList(scopeDeck,direction);
+      card.dataset.direction=direction;
       const c=due[idx];
       $('#reviewActions').classList.toggle('hidden',!c);
       reveal.classList.toggle('hidden',!c);
@@ -1155,7 +385,12 @@ function initDictionary() {
       const meaning=escapeHtml(c.meaning||window.KOTOBA_DICTIONARY?.[c.term]?.meaningVi||'');
       const example=escapeHtml(c.example);
       let front='';
-      if(c.stage===2&&c.example?.includes(c.term)){
+      if(direction==='vi-ja'){
+        const prompt=supportsVietnamese()
+          ?(c.stage===3?'Nhớ từ tiếng Nhật, rồi thử đặt một câu với từ đó.':'Từ này nói bằng tiếng Nhật là gì?')
+          :(c.stage===3?'日本語の単語を思い出して、その語で文を一つ作りましょう。':'日本語では何と言いますか？');
+        front=`<div class="flash-prompt" data-no-translate>${prompt}</div><div class="flash-front-main flash-front-vietnamese" lang="vi" data-flashcard-vietnamese data-learning-content>${meaning||escapeHtml(supportsVietnamese()?'Thẻ này chưa có nghĩa tiếng Việt.':'このカードにはベトナム語の意味がありません。')}</div>`;
+      }else if(c.stage===2&&c.example?.includes(c.term)){
         front=`<div class="flash-prompt">文脈から思い出してください</div><div class="context-example jp">${escapeHtml(c.example.replace(c.term,'＿＿＿'))}</div>`;
       }else if(c.stage===3&&c.example){
         front=`<div class="flash-prompt">この語を使って、自分の文を一つ考えてください</div><div class="flash-front-main jp" data-reading="${reading}">${term}</div>`;
@@ -1163,7 +398,7 @@ function initDictionary() {
         front=`<div class="flash-prompt">意味を思い出してください</div><div class="flash-front-main jp" data-reading="${reading}">${term}</div>`;
       }
       const back=`<h2 class="jp" data-reading="${reading}">${term}</h2><div data-learning-content>${reading}</div><p class="flash-meaning-label">ベトナム語の意味</p><h3 class="flash-meaning" lang="vi" data-flashcard-vietnamese data-learning-content>${meaning}</h3>${example?`<div class="context-example jp">${example}</div>`:''}`;
-      card.innerHTML=`<span class="source-badge">${escapeHtml(cardSource(c))}</span><div class="flash-front" id="flashFront" aria-hidden="false">${front}<p class="muted flash-hint">カードを押すと裏返せます。</p></div><div class="flash-back" id="flashBack" aria-hidden="true">${back}</div>`;
+      card.innerHTML=`<span class="source-badge">${escapeHtml(cardSource(c))}</span><div class="flash-front" id="flashFront" aria-hidden="false">${front}<p class="muted flash-hint" data-no-translate>${supportsVietnamese()?'Bấm thẻ, Enter hoặc phím cách để lật.':'カードを押すか、Enter・スペースキーで裏返せます。'}</p></div><div class="flash-back" id="flashBack" aria-hidden="true">${back}</div>`;
       setFlipped(false);
     };
     const rate=async rating=>{
@@ -1223,17 +458,26 @@ function initDictionary() {
     });
     render();
   }
-  function renderDeckList(deck){const el=$('#deckList');if(!el)return;el.innerHTML=deck.slice().reverse().map(c=>`<div class="deck-item"><div><b class="jp" data-reading="${escapeHtml(c.reading)}">${escapeHtml(c.term)}</b><div class="muted" style="font-size:12px">${escapeHtml(cardSource(c))}</div></div><span>${c.due<=todayKey()?'今日':'予定'}</span></div>`).join('')}
+  function renderDeckList(deck,direction='ja-vi'){
+    const el=$('#deckList');if(!el)return;
+    el.innerHTML=deck.slice().reverse().map(c=>{
+      const word=direction==='vi-ja'
+        ?`<b lang="vi" data-flashcard-vietnamese data-learning-content>${escapeHtml(c.meaning||window.KOTOBA_DICTIONARY?.[c.term]?.meaningVi||(supportsVietnamese()?'Chưa có nghĩa tiếng Việt':'ベトナム語の意味がありません'))}</b>`
+        :`<b class="jp" data-reading="${escapeHtml(c.reading)}">${escapeHtml(c.term)}</b>`;
+      return `<div class="deck-item"><div>${word}<div class="muted" style="font-size:12px">${escapeHtml(cardSource(c))}</div></div><span>${c.due<=todayKey()?'今日':'予定'}</span></div>`;
+    }).join('');
+  }
 
   // conversation
   if(document.body.dataset.page==='conversation')initConversation();
   function initConversation(){
-    let scenario='コンビニ', history=[], busy=false, generation=0, voiceReply=false;
+    let scenario='コンビニ', history=[], busy=false, generation=0, voiceReply=false, latestReply='';
     const log=$('#chatLog'), input=$('#chatText'), submit=$('#chatForm button[type="submit"]');
-    const prompts={コンビニ:'いらっしゃいませ。今日は何をお探しですか？',レストラン:'いらっしゃいませ。何名様ですか？',学校:'今日は学校で何を勉強しましたか？',友達:'今日はどうだった？何か面白いことがあった？',駅:'どこまで行きたいですか？',旅行:'日本ではどこへ行ってみたいですか？',自由会話:'こんにちは。今日は何について話したいですか？'};
+    const prompts={コンビニ:'いらっしゃいませ。何を買いますか？',レストラン:'いらっしゃいませ。何名様ですか？',学校:serverPrefs?.level==='N5'?'今日は学校で何をべんきょうしましたか？':'今日は学校で何を勉強しましたか？',友達:'今日は何をしましたか？',駅:'どこまで行きたいですか？',旅行:'日本でどこへ行きたいですか？',自由会話:'こんにちは。今日は何について話したいですか？'};
     const add=(who,text)=>{const d=document.createElement('div');d.className=`bubble ${who}`;d.textContent=text;log.appendChild(d);log.scrollTop=log.scrollHeight;return d};
-    const reset=()=>{if(activeRecognition)activeRecognition.abort();window.speechSynthesis?.cancel();voiceReply=false;generation++;history=[{role:'assistant',content:prompts[scenario]}];log.replaceChildren();add('teacher',prompts[scenario]);input.value='';$('#chatError').classList.add('hidden')};
+    const reset=()=>{window.KotobaSpeech?.stopListening();window.KotobaSpeech?.stopSpeaking();voiceReply=false;generation++;latestReply=prompts[scenario];history=[{role:'assistant',content:prompts[scenario]}];log.replaceChildren();add('teacher',prompts[scenario]);input.value='';$('#chatError').classList.add('hidden')};
     reset();
+    const listenButton=$('#conversationListen');listenButton?.addEventListener('click',()=>speakJapanese(latestReply,listenButton));
     $$('.scenario-btn').forEach(b=>b.addEventListener('click',()=>{$$('.scenario-btn').forEach(x=>x.classList.remove('active'));b.classList.add('active');scenario=b.dataset.scenario;reset()}));
     $('#chatForm').onsubmit=async e=>{
       e.preventDefault();if(busy)return;
@@ -1246,7 +490,7 @@ function initDictionary() {
         const reply=await aiReply(scenario,text,history.slice(-20));
         if(current!==generation)return;
         pending.textContent=reply;
-        if(voiceReply&&window.speechSynthesis){try{const speech=new SpeechSynthesisUtterance(reply);speech.lang='ja-JP';speech.rate=.9;window.speechSynthesis.speak(speech)}catch(error){toast(supportsVietnamese()?'Không phát được âm thanh. Bạn có thể đọc phản hồi trên màn hình.':'音声を再生できません。画面の返答を確認してください。')}}
+        latestReply=reply;if(voiceReply)speakJapanese(reply,$('#conversationListen'));
         voiceReply=false;
         history.push({role:'user',content:text},{role:'assistant',content:reply});
         history=history.slice(-20);

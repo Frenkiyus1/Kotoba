@@ -22,6 +22,8 @@ import {
   dictionaryLookup
 } from "./routes/dictionary.js";
 
+import { support } from "./routes/support.js";
+
 import {
   getState,
   me,
@@ -80,6 +82,11 @@ async function handleApi(request, env) {
     });
   }
 
+
+  // Guest onboarding help is read-only and does not require D1 or login.
+  if (method === "POST" && path === "/api/ai/support") {
+    return support(request, env);
+  }
 
   /* ---------------------------------------------------------
      Từ đây trở xuống đều cần database

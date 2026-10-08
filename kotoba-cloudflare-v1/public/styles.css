@@ -433,3 +433,18 @@ body[data-furigana="hide"] ruby.furigana{line-height:inherit}
 .review-heading,.chat-head{flex-wrap:wrap;gap:12px}
 .review-heading .furigana-controls,.chat-head .furigana-controls{margin-top:0}
 .label-pill:has(ruby.furigana){line-height:2.1}
+
+/* Audio controls and dictionary access on touch screens. */
+.voice-status{font-size:13px;line-height:1.6;color:var(--muted);margin:8px 0;overflow-wrap:anywhere}
+.voice-status:empty{display:none}.voice-status.voice-error{color:var(--danger)}
+.chat-audio-controls{padding:8px 20px}.chat-audio-controls .voice-status{margin-bottom:0}
+.mic{min-width:48px;width:auto;min-height:44px;padding:10px 12px;font-size:13px;border-radius:14px;line-height:1.4;flex-shrink:0}
+.speech-row{align-items:flex-start}.speech-row .mic{max-width:120px}.btn.speaking{box-shadow:0 0 0 3px var(--petal)}
+.dictionary-selection-action{display:none;position:fixed;z-index:80;max-width:180px;padding:10px 14px;border-radius:10px;border:1px solid var(--border);background:var(--paper);color:var(--sumi);font:inherit;font-size:13px;box-shadow:var(--shadow);cursor:pointer}
+.dictionary-selection-action.show{display:block}.dictionary-selection-action:focus-visible{outline:2px solid var(--vermilion);outline-offset:2px}
+.dictionary-shortcuts{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.dictionary-question-form{display:grid;gap:8px;margin:16px 0}
+.dictionary-question-form label{font-size:13px;font-weight:600}.dictionary-question-form input{width:100%;padding:10px;border:1px solid var(--border);background:var(--paper);color:var(--sumi);border-radius:8px;font:inherit;font-size:14px;min-width:0}
+.dictionary-question-form input:focus{outline:2px solid var(--vermilion);outline-offset:2px}.dictionary-question-form .btn{justify-self:start}
+@media(max-width:520px){.chat-input{flex-wrap:wrap}.chat-input input{flex:1 1 100%;min-width:0}.chat-input .mic{flex:1}.chat-input button[type="submit"]{flex:1}.speech-row{flex-wrap:wrap}.speech-row textarea{flex-basis:100%}.speech-row .mic{max-width:none}.dictionary-panel{max-height:calc(100dvh - 24px)}}
+
+.chat-card > .voice-status{margin:0;padding:0 20px 8px}
